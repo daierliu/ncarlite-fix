@@ -1022,7 +1022,7 @@
 
     invoke-virtual {v0, v1, v2}, Ljava/lang/StringBuilder;->append(J)Ljava/lang/StringBuilder;
 
-    const-string v1, ",\"lv\":-1,\"kv\":-1,\"tv\":-1,\"rv\":-1,\"yv\":-1,\"_nmclfl\":1}"
+    const-string v1, ",\"lv\":-1,\"kv\":-1,\"tv\":-1,\"rv\":-1,\"yv\":-1}"
 
     invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
@@ -2455,18 +2455,14 @@
     const-string v6, "MusicLite.Lyric"
 
     invoke-static {v6, v8}, Landroid/util/Log;->i(Ljava/lang/String;Ljava/lang/String;)I
-    const/4 v12, 0x3        # fixed: cur row is always index 3 in cur-relative slots
+    sub-int v12, v3, v10    # iCur
 
     move v7, v10
 
     :loop
     if-gt v7, v11, :loop_end
 
-    # slot index relative to the CURRENT line: cur always sits at slot 3
-    # (rows before it shift up, rows after shift down by one for the translation line)
-    sub-int v8, v7, v3
-
-    add-int/lit8 v8, v8, 0x3
+    sub-int v8, v7, v10
 
     if-le v8, v12, :slot_ok
 
@@ -2621,7 +2617,7 @@
 
     iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->pNbr:Landroid/graphics/Paint;
 
-    const/16 v1, 0x14
+    const/16 v1, 0x18
 
     invoke-direct {p0, v1}, Lcom/car/musiclite/LyricsBox;->dpF(I)F
 
