@@ -757,6 +757,8 @@
     # rebuild the view tree in place (no Activity recreate): pages keep their
     # in-memory data, no restart flash; old views detach so VinylView releases
     # its Visualizer via onDetachedFromWindow
+    invoke-direct {p0}, Lcom/car/musiclite/MainActivity;->initScale()V
+
     invoke-direct {p0}, Lcom/car/musiclite/MainActivity;->buildUi()V
 
     sget v0, Lcom/car/musiclite/MainActivity;->curScreen:I
@@ -3049,6 +3051,46 @@
     return-void
 .end method
 
+.method private initScale()V
+    .locals 4
+
+    invoke-virtual {p0}, Lcom/car/musiclite/MainActivity;->getResources()Landroid/content/res/Resources;
+
+    move-result-object v0
+
+    invoke-virtual {v0}, Landroid/content/res/Resources;->getDisplayMetrics()Landroid/util/DisplayMetrics;
+
+    move-result-object v0
+
+    # scale = min(screenW / 1920, screenH / 720) : fit the 1920x720 car-unit design
+    iget v1, v0, Landroid/util/DisplayMetrics;->widthPixels:I
+
+    int-to-float v1, v1
+
+    const v2, 0x44f00000    # 1920.0f
+
+    div-float v1, v1, v2
+
+    iget v2, v0, Landroid/util/DisplayMetrics;->heightPixels:I
+
+    int-to-float v2, v2
+
+    const v3, 0x44340000    # 720.0f
+
+    div-float v2, v2, v3
+
+    invoke-static {v1, v2}, Ljava/lang/Math;->min(FF)F
+
+    move-result v1
+
+    # override density/scaledDensity: dp(I) and setTextSize(sp) all pick this up automatically
+    iput v1, v0, Landroid/util/DisplayMetrics;->density:F
+
+    iput v1, v0, Landroid/util/DisplayMetrics;->scaledDensity:F
+
+    return-void
+.end method
+
 .method private dp(I)I
     .locals 1
 
@@ -4573,6 +4615,10 @@
 
     .line 132
     invoke-super {p0, p1}, Landroid/app/Activity;->onCreate(Landroid/os/Bundle;)V
+
+    # global display scaling: make UI scale relative to the 1920x720 car-unit design,
+    # so it fits any screen (phone included). Overrides density/scaledDensity before any layout.
+    invoke-direct {p0}, Lcom/car/musiclite/MainActivity;->initScale()V
 
     # runtime RECORD_AUDIO grant for Visualizer spectrum
     # guard: requestPermissions() is API 23+; car runs Android 4.3 (API 18)
