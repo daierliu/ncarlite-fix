@@ -1,6 +1,6 @@
 [README.md](https://github.com/user-attachments/files/35138949/README.md)
-车机 GEELY Android 4.3 v
-# 云音乐 Lite — APK 备车机 GEELY Android 4.3
+车机 GEELY Android 4.3 
+# 云音乐 Lite — APK 
 
 ## 应用信息
 
@@ -12,9 +12,6 @@
 | minSdk | 18（Android 4.3） |
 | targetSdk | 28（Android 9） |
 | APK 文件 | `yun-music-lite-1.0.0.apk`（约 882 KB） |
-| 提取来源 | 小米 10 (umi)，无线 ADB 192.168.1.9:43475 |
-| 提取日期 | 2026-11-17 |
-
 ## 备注
 
 - 从包名 `com.car.musiclite` 看，这是一款车机端音乐播放应用。
@@ -38,8 +35,3 @@
 - 应用为原生 UI + 直连网易 API，自有代码仅 7 个类（Api/Crypto/Zx/MainActivity/PlayerService 等）。
 - 网易 `music.163.com/weapi/*` POST 已被服务端按 TLS/HTTP2 指纹拦截；**经典 `/api/*` GET 通道仍可用**，全部所需接口（登录二维码、搜索、歌单、播放地址、每日推荐等 8+ 个）均已验证等价。
 - 登录链路：`/api/login/qrcode/unikey?type=3` → 轮询 `client/login` → 从 Set-Cookie 抓 `MUSIC_U`。
-
-### 备注
-
-- 手机上提取的 APK（SHA-256 `7709da05…`）与本地 `APK/` 内 4 个包及 loginfix 产物哈希均不一致，可能是不同签名的构建，待后续比对。
-- GEELY 车机 adb：`10.238.95.238:5555`（Android 4.3）。
