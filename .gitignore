@@ -1,0 +1,5 @@
+# build staging
+C:/Temp/
+*.log
+Thumbs.db
+.DS_Store
