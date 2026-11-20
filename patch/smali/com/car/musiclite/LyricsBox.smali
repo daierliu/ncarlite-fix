@@ -1968,6 +1968,8 @@
 
     array-length v1, v0
 
+    if-ltz p2, :plain
+
     if-ge p2, v1, :plain
 
     aget-object v0, v0, p2
@@ -2159,6 +2161,8 @@
 
     array-length v1, v0
 
+    if-ltz p2, :pr2
+
     if-ge p2, v1, :pr2
 
     aget-object v0, v0, p2
@@ -2211,6 +2215,8 @@
     if-eqz v0, :pr3
 
     array-length v1, v0
+
+    if-ltz p2, :pr4
 
     if-ge p2, v1, :pr4
 
@@ -2344,7 +2350,7 @@
     :c_ok
     add-int/lit8 v10, v3, -0x3
 
-    if-ltz v10, :w_lo_ok
+    if-gez v10, :w_lo_ok
 
     const/4 v10, 0x0
     :w_lo_ok
