@@ -14,6 +14,7 @@
 .field private lines:[Ljava/lang/String;
 .field private pendingId:J
 .field private times:[I
+.field private trans:Ljava/util/HashMap;
 .field private view:Landroid/widget/TextView;
 
 
@@ -24,6 +25,7 @@
 .field static sLine:I
 .field static sLines:[Ljava/lang/String;
 .field static sTimes:[I
+.field static sTrans:Ljava/util/HashMap;
 
 
 # direct methods
@@ -59,6 +61,8 @@
     return-void
 .end method
 
+# filter target: credits block ("作词 : xxx" etc.) sits at the song start (<15s)
+# and always contains a colon; real lyric lines that early almost never do
 .method private parse(Ljava/lang/String;)Z
     .locals 12
 
@@ -227,7 +231,45 @@
     goto :goto_next
 
     :have_times
-    # one lyrics row per timestamp (all share the same text)
+    # credits filter: first timestamp < 15s and text contains a colon -> skip line
+    const/4 v7, 0x0
+
+    invoke-virtual {v2, v7}, Ljava/util/ArrayList;->get(I)Ljava/lang/Object;
+
+    move-result-object v9
+
+    check-cast v9, Ljava/lang/Integer;
+
+    invoke-virtual {v9}, Ljava/lang/Integer;->intValue()I
+
+    move-result v8
+
+    const/16 v6, 0x3a98    # 15000
+
+    if-ge v8, v6, :gt_filter_ok
+
+    const/16 v6, 0x3a      # ':'
+
+    invoke-virtual {v5, v6}, Ljava/lang/String;->indexOf(I)I
+
+    move-result v11
+
+    if-gez v11, :gt_filter_full
+
+    goto :goto_next
+
+    :gt_filter_full
+    const v6, 0xff1a       # '\uff1a'
+
+    invoke-virtual {v5, v6}, Ljava/lang/String;->indexOf(I)I
+
+    move-result v11
+
+    if-gez v11, :gt_filter_ok
+
+    goto :goto_next
+
+    :gt_filter_ok
     const/4 v7, 0x0
 
     :gt_loop
@@ -385,6 +427,178 @@
     .catch Ljava/lang/Throwable; {:try_tm .. :tm_ok} :tm_bad
 .end method
 
+# translation LRC (tlyric.lyric from /api/song/lyric) -> map time(ms) -> text
+.method private parseTrans(Ljava/lang/String;)V
+    .locals 10
+
+    if-eqz p1, :t_ret
+
+    new-instance v0, Ljava/util/HashMap;
+
+    invoke-direct {v0}, Ljava/util/HashMap;-><init>()V
+
+    const-string v1, "\n"
+
+    invoke-virtual {p1, v1}, Ljava/lang/String;->split(Ljava/lang/String;)[Ljava/lang/String;
+
+    move-result-object v1
+
+    const/4 v2, 0x0
+
+    :t_line
+    array-length v3, v1
+
+    if-ge v2, v3, :t_store
+
+    aget-object v3, v1, v2
+
+    new-instance v4, Ljava/util/ArrayList;
+
+    invoke-direct {v4}, Ljava/util/ArrayList;-><init>()V
+
+    :t_groups
+    const-string v5, "["
+
+    invoke-virtual {v3, v5}, Ljava/lang/String;->startsWith(Ljava/lang/String;)Z
+
+    move-result v5
+
+    if-eqz v5, :t_have
+
+    const/16 v5, 0x5d
+
+    invoke-virtual {v3, v5}, Ljava/lang/String;->indexOf(I)I
+
+    move-result v6
+
+    if-ltz v6, :t_next
+
+    const/4 v5, 0x1
+
+    invoke-virtual {v3, v5, v6}, Ljava/lang/String;->substring(II)Ljava/lang/String;
+
+    move-result-object v7
+
+    add-int/lit8 v5, v6, 0x1
+
+    invoke-virtual {v3, v5}, Ljava/lang/String;->substring(I)Ljava/lang/String;
+
+    move-result-object v3
+
+    :t_try
+    const/16 v5, 0x3a
+
+    invoke-virtual {v7, v5}, Ljava/lang/String;->indexOf(I)I
+
+    move-result v8
+
+    if-ltz v8, :t_next
+
+    const/4 v5, 0x0
+
+    invoke-virtual {v7, v5, v8}, Ljava/lang/String;->substring(II)Ljava/lang/String;
+
+    move-result-object v5
+
+    invoke-static {v5}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I
+
+    move-result v5
+
+    add-int/lit8 v6, v8, 0x1
+
+    invoke-virtual {v7, v6}, Ljava/lang/String;->substring(I)Ljava/lang/String;
+
+    move-result-object v6
+
+    invoke-static {v6}, Ljava/lang/Float;->parseFloat(Ljava/lang/String;)F
+
+    move-result v6
+
+    const/high16 v7, 0x447a0000    # 1000.0f
+
+    mul-float/2addr v6, v7
+
+    float-to-int v6, v6
+
+    const/16 v7, 0xea60
+
+    mul-int/2addr v5, v7
+
+    add-int/2addr v5, v6
+
+    invoke-static {v5}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    move-result-object v5
+
+    invoke-virtual {v4, v5}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+
+    :t_ok
+    goto :t_groups
+
+    :t_bad
+    goto :t_next
+
+    :t_have
+    invoke-virtual {v3}, Ljava/lang/String;->trim()Ljava/lang/String;
+
+    move-result-object v3
+
+    invoke-virtual {v3}, Ljava/lang/String;->isEmpty()Z
+
+    move-result v5
+
+    if-nez v5, :t_next
+
+    invoke-virtual {v4}, Ljava/util/ArrayList;->size()I
+
+    move-result v5
+
+    if-nez v5, :t_put
+
+    goto :t_next
+
+    :t_put
+    const/4 v5, 0x0
+
+    :t_put_loop
+    invoke-virtual {v4}, Ljava/util/ArrayList;->size()I
+
+    move-result v6
+
+    if-ge v5, v6, :t_next
+
+    invoke-virtual {v4, v5}, Ljava/util/ArrayList;->get(I)Ljava/lang/Object;
+
+    move-result-object v6
+
+    check-cast v6, Ljava/lang/Integer;
+
+    invoke-virtual {v0, v6, v3}, Ljava/util/HashMap;->put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+
+    add-int/lit8 v5, v5, 0x1
+
+    goto :t_put_loop
+
+    :t_next
+    add-int/lit8 v2, v2, 0x1
+
+    goto :t_line
+
+    :t_store
+    invoke-virtual {v0}, Ljava/util/HashMap;->size()I
+
+    move-result v1
+
+    if-lez v1, :t_ret
+
+    iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->trans:Ljava/util/HashMap;
+
+    :t_ret
+    return-void
+
+    .catch Ljava/lang/Throwable; {:t_try .. :t_ok} :t_bad
+.end method
+
 .method private postRender()V
     .locals 3
 
@@ -399,16 +613,18 @@
     return-void
 .end method
 
+# 7-row window around the current line; current row white/bold/1.3x with the
+# translation underneath, neighbors fade out by distance (Apple-style)
 .method private renderCore()V
-    .locals 7
+    .locals 10
 
     iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
 
     if-eqz v0, :cond_empty
 
-    array-length v0, v0
+    array-length v2, v0
 
-    if-nez v0, :goto_go
+    if-nez v2, :goto_go
 
     :cond_empty
     iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->view:Landroid/widget/TextView;
@@ -424,120 +640,281 @@
 
     invoke-direct {v0}, Landroid/text/SpannableStringBuilder;-><init>()V
 
-    const/4 v1, 0x0
-
-    :goto_line
-    iget-object v2, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
-
-    array-length v2, v2
-
-    if-ge v1, v2, :cond_line_end
-
+    # window: curLine-3 .. curLine+3, clamped
     iget v2, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
 
-    # window: curLine-2 .. curLine+2 (5 rows total)
-    const/4 v3, 0x2
+    const/4 v6, 0x3
 
-    sub-int/2addr v2, v3
+    sub-int/2addr v2, v6
 
-    if-ltz v2, :cond_low_ok
+    if-ltz v2, :lo_ok
 
-    if-lt v1, v2, :goto_skip
+    const/4 v2, 0x0
 
-    :cond_low_ok
-    iget v2, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
+    :lo_ok
+    iget v3, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
 
-    const/4 v3, 0x2
+    const/4 v6, 0x3
 
-    add-int/2addr v2, v3
+    add-int/2addr v3, v6
 
-    if-gt v1, v2, :goto_skip
+    iget-object v6, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
+
+    array-length v6, v6
+
+    add-int/lit8 v6, v6, -0x1
+
+    if-le v3, v6, :hi_ok
+
+    move v3, v6
+
+    :hi_ok
+    move v1, v2
+
+    :loop
+    if-gt v1, v3, :done
 
     invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
 
     move-result v2
 
-    if-lez v2, :cond_nosep
+    if-lez v2, :nosep
 
     const/16 v2, 0xa
 
     invoke-virtual {v0, v2}, Landroid/text/SpannableStringBuilder;->append(C)Landroid/text/SpannableStringBuilder;
 
-    move-result-object v0
-
-    :cond_nosep
+    :nosep
     invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
 
-    move-result v3
+    move-result v2           # span start
 
-    iget v2, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
+    iget v6, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
 
-    if-ne v1, v2, :cond_plain
+    if-ne v1, v6, :other
 
+    # ================= current line =================
     const-string v4, "\u25cf "
 
     invoke-virtual {v0, v4}, Landroid/text/SpannableStringBuilder;->append(Ljava/lang/CharSequence;)Landroid/text/SpannableStringBuilder;
 
-    move-result-object v0
+    iget-object v4, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
 
-    :cond_plain
-    iget-object v2, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
+    aget-object v4, v4, v1
 
-    aget-object v2, v2, v1
-
-    invoke-virtual {v0, v2}, Landroid/text/SpannableStringBuilder;->append(Ljava/lang/CharSequence;)Landroid/text/SpannableStringBuilder;
-
-    move-result-object v0
+    invoke-virtual {v0, v4}, Landroid/text/SpannableStringBuilder;->append(Ljava/lang/CharSequence;)Landroid/text/SpannableStringBuilder;
 
     invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
 
-    move-result v4
+    move-result v7           # span end
 
-    iget v2, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
-
-    if-ne v1, v2, :cond_gray
-
-    new-instance v5, Landroid/text/style/ForegroundColorSpan;
+    # white
+    new-instance v4, Landroid/text/style/ForegroundColorSpan;
 
     const v6, -0x1
 
-    invoke-direct {v5, v6}, Landroid/text/style/ForegroundColorSpan;-><init>(I)V
+    invoke-direct {v4, v6}, Landroid/text/style/ForegroundColorSpan;-><init>(I)V
 
-    const/16 v6, 0x21
+    const/16 v8, 0x21
 
-    invoke-virtual {v0, v5, v3, v4, v6}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
+    invoke-virtual {v0, v4, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
 
-    new-instance v5, Landroid/text/style/RelativeSizeSpan;
+    # 1.3x
+    new-instance v4, Landroid/text/style/RelativeSizeSpan;
 
-    const/high16 v6, 0x3fa00000    # 1.25f
+    const v6, 0x3fa66666    # 1.3f
 
-    invoke-direct {v5, v6}, Landroid/text/style/RelativeSizeSpan;-><init>(F)V
+    invoke-direct {v4, v6}, Landroid/text/style/RelativeSizeSpan;-><init>(F)V
 
-    const/16 v6, 0x21
+    const/16 v8, 0x21
 
-    invoke-virtual {v0, v5, v3, v4, v6}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
+    invoke-virtual {v0, v4, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
 
-    goto :goto_skip
+    # bold
+    new-instance v4, Landroid/text/style/StyleSpan;
 
-    :cond_gray
-    new-instance v5, Landroid/text/style/ForegroundColorSpan;
+    const/4 v6, 0x1
 
+    invoke-direct {v4, v6}, Landroid/text/style/StyleSpan;-><init>(I)V
+
+    const/16 v8, 0x21
+
+    invoke-virtual {v0, v4, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
+
+    # translation line underneath
+    iget-object v4, p0, Lcom/car/musiclite/LyricsBox;->trans:Ljava/util/HashMap;
+
+    if-eqz v4, :norm
+
+    iget-object v5, p0, Lcom/car/musiclite/LyricsBox;->times:[I
+
+    if-eqz v5, :norm
+
+    aget v6, v5, v1
+
+    invoke-static {v6}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    move-result-object v5
+
+    invoke-virtual {v4, v5}, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;
+
+    move-result-object v4
+
+    check-cast v4, Ljava/lang/String;
+
+    if-eqz v4, :norm
+
+    invoke-virtual {v4}, Ljava/lang/String;->trim()Ljava/lang/String;
+
+    move-result-object v5
+
+    invoke-virtual {v5}, Ljava/lang/String;->isEmpty()Z
+
+    move-result v5
+
+    if-nez v5, :norm
+
+    const/16 v5, 0xa
+
+    invoke-virtual {v0, v5}, Landroid/text/SpannableStringBuilder;->append(C)Landroid/text/SpannableStringBuilder;
+
+    invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
+
+    move-result v2           # translation span start
+
+    invoke-virtual {v0, v4}, Landroid/text/SpannableStringBuilder;->append(Ljava/lang/CharSequence;)Landroid/text/SpannableStringBuilder;
+
+    invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
+
+    move-result v7           # translation span end
+
+    # sub color @ alpha 210
     invoke-static {}, Lcom/car/musiclite/MainActivity;->textSub()I
 
     move-result v6
 
+    invoke-static {v6}, Landroid/graphics/Color;->red(I)I
+
+    move-result v8
+
+    invoke-static {v6}, Landroid/graphics/Color;->green(I)I
+
+    move-result v9
+
+    invoke-static {v6}, Landroid/graphics/Color;->blue(I)I
+
+    move-result v6
+
+    const/16 v5, 0xd2
+
+    invoke-static {v5, v8, v9, v6}, Landroid/graphics/Color;->argb(IIII)I
+
+    move-result v5
+
+    new-instance v4, Landroid/text/style/ForegroundColorSpan;
+
+    invoke-direct {v4, v5}, Landroid/text/style/ForegroundColorSpan;-><init>(I)V
+
+    const/16 v8, 0x21
+
+    invoke-virtual {v0, v4, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
+
+    # 0.8x
+    new-instance v4, Landroid/text/style/RelativeSizeSpan;
+
+    const v6, 0x3f4ccccd    # 0.8f
+
+    invoke-direct {v4, v6}, Landroid/text/style/RelativeSizeSpan;-><init>(F)V
+
+    const/16 v8, 0x21
+
+    invoke-virtual {v0, v4, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
+
+    goto :norm
+
+    # ================= neighbor lines =================
+    :other
+    iget v6, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
+
+    sub-int v6, v1, v6
+
+    if-gez v6, :d_pos
+
+    neg-int v6, v6
+
+    :d_pos
+    const/16 v8, 0x32        # 50
+
+    mul-int/2addr v8, v6
+
+    rsub-int v6, v8, 0xff    # alpha = 255 - 50*distance
+
+    const/16 v8, 0x5a        # floor 90
+
+    if-ge v6, v8, :alpha_ok
+
+    const/16 v6, 0x5a
+
+    :alpha_ok
+    invoke-static {}, Lcom/car/musiclite/MainActivity;->textSub()I
+
+    move-result v9
+
+    invoke-static {v9}, Landroid/graphics/Color;->red(I)I
+
+    move-result v7
+
+    invoke-static {v9}, Landroid/graphics/Color;->green(I)I
+
+    move-result v8
+
+    invoke-static {v9}, Landroid/graphics/Color;->blue(I)I
+
+    move-result v9
+
+    invoke-static {v6, v7, v8, v9}, Landroid/graphics/Color;->argb(IIII)I
+
+    move-result v6
+
+    iget-object v4, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
+
+    aget-object v4, v4, v1
+
+    invoke-virtual {v0, v4}, Landroid/text/SpannableStringBuilder;->append(Ljava/lang/CharSequence;)Landroid/text/SpannableStringBuilder;
+
+    invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
+
+    move-result v7           # span end
+
+    new-instance v5, Landroid/text/style/ForegroundColorSpan;
+
     invoke-direct {v5, v6}, Landroid/text/style/ForegroundColorSpan;-><init>(I)V
 
-    const/16 v6, 0x21
+    const/16 v8, 0x21
 
-    invoke-virtual {v0, v5, v3, v4, v6}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
+    invoke-virtual {v0, v5, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
 
-    :goto_skip
+    # normalize temp registers so both branch paths merge with equal types
+    :norm
+    const/4 v2, 0x0
+
+    const/4 v4, 0x0
+
+    const/4 v5, 0x0
+
+    const/4 v6, 0x0
+
+    const/4 v7, 0x0
+
+    const/4 v8, 0x0
+
+    const/4 v9, 0x0
+
     add-int/lit8 v1, v1, 0x1
 
-    goto :goto_line
+    goto :loop
 
-    :cond_line_end
+    :done
     iget-object v1, p0, Lcom/car/musiclite/LyricsBox;->view:Landroid/widget/TextView;
 
     invoke-virtual {v1, v0}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
@@ -696,6 +1073,10 @@
 
     iput v0, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
 
+    sget-object v0, Lcom/car/musiclite/LyricsBox;->sTrans:Ljava/util/HashMap;
+
+    iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->trans:Ljava/util/HashMap;
+
     invoke-direct {p0}, Lcom/car/musiclite/LyricsBox;->postRender()V
 
     sget-object v0, Lcom/car/musiclite/LyricsBox;->sBmp:Landroid/graphics/Bitmap;
@@ -714,11 +1095,11 @@
 
     iput v0, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
 
-    const/4 v0, 0x0
-
     iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->times:[I
 
     iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
+
+    iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->trans:Ljava/util/HashMap;
 
     # diag: log every (re)load trigger
     const-string v0, "MusicLite.Lyric"
@@ -809,7 +1190,7 @@
 .method public run()V
     .locals 6
 
-    # ============ lyrics ============
+    # ============ lyrics: POST /api/song/lyric {id, lv:-1, kv:-1, tv:-1, rv:-1} ============
     :try_start_a
     new-instance v0, Ljava/lang/StringBuilder;
 
@@ -819,19 +1200,13 @@
 
     invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
-    move-result-object v0
-
     iget-wide v1, p0, Lcom/car/musiclite/LyricsBox;->pendingId:J
 
     invoke-virtual {v0, v1, v2}, Ljava/lang/StringBuilder;->append(J)Ljava/lang/StringBuilder;
 
-    move-result-object v0
-
-    const-string v1, ",\"lv\":-1,\"kv\":-1,\"tv\":-1}"
+    const-string v1, ",\"lv\":-1,\"kv\":-1,\"tv\":-1,\"rv\":-1}"
 
     invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
-
-    move-result-object v0
 
     invoke-virtual {v0}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
 
@@ -849,13 +1224,13 @@
 
     invoke-virtual {v0, v2, v1}, Lcom/car/musiclite/Api;->post(Ljava/lang/String;Ljava/lang/String;)Lorg/json/JSONObject;
 
-    move-result-object v0
+    move-result-object v5
 
-    if-eqz v0, :goto_cover
+    if-eqz v5, :goto_cover
 
     const-string v1, "lrc"
 
-    invoke-virtual {v0, v1}, Lorg/json/JSONObject;->getJSONObject(Ljava/lang/String;)Lorg/json/JSONObject;
+    invoke-virtual {v5, v1}, Lorg/json/JSONObject;->getJSONObject(Ljava/lang/String;)Lorg/json/JSONObject;
 
     move-result-object v0
 
@@ -888,6 +1263,38 @@
 
     sput v1, Lcom/car/musiclite/LyricsBox;->sLine:I
 
+    # translation (tlyric) - optional, failure must not block rendering
+    :try_start_t
+    const-string v1, "tlyric"
+
+    invoke-virtual {v5, v1}, Lorg/json/JSONObject;->optJSONObject(Ljava/lang/String;)Lorg/json/JSONObject;
+
+    move-result-object v1
+
+    if-eqz v1, :t_done
+
+    const-string v2, "lyric"
+
+    invoke-virtual {v1, v2}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v1
+
+    invoke-direct {p0, v1}, Lcom/car/musiclite/LyricsBox;->parseTrans(Ljava/lang/String;)V
+
+    iget-object v1, p0, Lcom/car/musiclite/LyricsBox;->trans:Ljava/util/HashMap;
+
+    sput-object v1, Lcom/car/musiclite/LyricsBox;->sTrans:Ljava/util/HashMap;
+
+    :t_done
+    :try_end_t
+    .catch Ljava/lang/Throwable; {:try_start_t .. :try_end_t} :goto_catch_t
+
+    goto :goto_render
+
+    :goto_catch_t
+    move-exception v1
+
+    :goto_render
     invoke-direct {p0}, Lcom/car/musiclite/LyricsBox;->postRender()V
     :try_end_a
     .catch Ljava/lang/Throwable; {:try_start_a .. :try_end_a} :goto_catch_a
@@ -908,19 +1315,13 @@
 
     invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
-    move-result-object v0
-
     iget-wide v1, p0, Lcom/car/musiclite/LyricsBox;->pendingId:J
 
     invoke-virtual {v0, v1, v2}, Ljava/lang/StringBuilder;->append(J)Ljava/lang/StringBuilder;
 
-    move-result-object v0
-
     const-string v1, "]\"}"
 
     invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
-
-    move-result-object v0
 
     invoke-virtual {v0}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
 
