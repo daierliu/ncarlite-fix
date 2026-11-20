@@ -647,7 +647,7 @@
 
     sub-int/2addr v2, v6
 
-    if-ltz v2, :lo_ok
+    if-gez v2, :lo_ok
 
     const/4 v2, 0x0
 
