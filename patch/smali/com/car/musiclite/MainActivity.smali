@@ -1669,34 +1669,25 @@
 
     invoke-virtual {v1, v8, v15}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
 
-    new-instance v15, Landroid/widget/TextView;
+    # lyrics renderer is now a self-drawing View (word-level + glow, see LyricsBox)
+    new-instance v15, Lcom/car/musiclite/LyricsBox;
 
-    invoke-direct {v15, v0}, Landroid/widget/TextView;-><init>(Landroid/content/Context;)V
+    iget-object v8, v0, Lcom/car/musiclite/MainActivity;->coverView:Landroid/widget/ImageView;
 
-    iput-object v15, v0, Lcom/car/musiclite/MainActivity;->lyricsView:Landroid/widget/TextView;
+    invoke-direct {v15, v0, v8}, Lcom/car/musiclite/LyricsBox;-><init>(Landroid/content/Context;Landroid/widget/ImageView;)V
 
-    # white lyrics on glow background
-    const v8, -0x1
-
-    invoke-virtual {v15, v8}, Landroid/widget/TextView;->setTextColor(I)V
-
-    const/high16 v8, 0x41f00000    # 30.0f (2x)
-
-    invoke-virtual {v15, v8}, Landroid/widget/TextView;->setTextSize(F)V
-
-    const/16 v8, 0x11
-
-    invoke-virtual {v15, v8}, Landroid/widget/TextView;->setGravity(I)V
+    iput-object v15, v0, Lcom/car/musiclite/MainActivity;->lyricsBox:Lcom/car/musiclite/LyricsBox;
 
     new-instance v8, Landroid/widget/LinearLayout$LayoutParams;
 
-    const/4 v15, -0x1
+    const/4 v9, -0x1
 
-    invoke-direct {v8, v4, v15, v14}, Landroid/widget/LinearLayout$LayoutParams;-><init>(IIF)V
-
-    iget-object v15, v0, Lcom/car/musiclite/MainActivity;->lyricsView:Landroid/widget/TextView;
+    invoke-direct {v8, v4, v9, v14}, Landroid/widget/LinearLayout$LayoutParams;-><init>(IIF)V
 
     invoke-virtual {v1, v15, v8}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
+
+    # restore the original register state of the removed block (v13 held mainPane here)
+    iget-object v13, v0, Lcom/car/musiclite/MainActivity;->mainPane:Landroid/widget/LinearLayout;
 
     const/4 v8, -0x1
 
@@ -1775,16 +1766,6 @@
     invoke-virtual {v15, v8}, Landroid/view/View;->setOnTouchListener(Landroid/view/View$OnTouchListener;)V
 
     const/4 v4, 0x0
-
-    iget-object v15, v0, Lcom/car/musiclite/MainActivity;->lyricsView:Landroid/widget/TextView;
-
-    iget-object v13, v0, Lcom/car/musiclite/MainActivity;->coverView:Landroid/widget/ImageView;
-
-    new-instance v8, Lcom/car/musiclite/LyricsBox;
-
-    invoke-direct {v8, v0, v15, v13}, Lcom/car/musiclite/LyricsBox;-><init>(Landroid/content/Context;Landroid/widget/TextView;Landroid/widget/ImageView;)V
-
-    iput-object v8, v0, Lcom/car/musiclite/MainActivity;->lyricsBox:Lcom/car/musiclite/LyricsBox;
 
     # nav card (AMap auto standard broadcast data), top-right over the lyrics overlay
     new-instance v8, Landroid/widget/LinearLayout;

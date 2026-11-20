@@ -1,5 +1,5 @@
 .class public Lcom/car/musiclite/LyricsBox;
-.super Ljava/lang/Object;
+.super Landroid/view/View;
 .implements Ljava/lang/Runnable;
 .source "LyricsBox.java"
 
@@ -12,10 +12,15 @@
 .field private curLine:I
 .field private handler:Landroid/os/Handler;
 .field private lines:[Ljava/lang/String;
+.field msg:Ljava/lang/String;
 .field private pendingId:J
 .field private times:[I
 .field private trans:Ljava/util/HashMap;
-.field private view:Landroid/widget/TextView;
+.field private pMain:Landroid/graphics/Paint;
+.field private pGlow:Landroid/graphics/Paint;
+.field private pNbr:Landroid/graphics/Paint;
+.field private pTr:Landroid/graphics/Paint;
+.field private pMsg:Landroid/graphics/Paint;
 
 
 # static cache: survives in-place UI rebuild (theme switch) so lyrics + cover
@@ -26,19 +31,23 @@
 .field static sLines:[Ljava/lang/String;
 .field static sTimes:[I
 .field static sTrans:Ljava/util/HashMap;
+# word-level lyric cache (NetEase yrc): per row String[] of word tokens + int[] of [s0,d0,s1,d1,...]
+.field static sPat:Ljava/util/regex/Pattern;
+.field static sYChars:[[Ljava/lang/String;
+.field static sYW:[[I
+.field static sYRowStart:[I
+.field static sYRowText:[Ljava/lang/String;
 
 
 # direct methods
-.method public constructor <init>(Landroid/content/Context;Landroid/widget/TextView;Landroid/widget/ImageView;)V
-    .locals 2
+.method public constructor <init>(Landroid/content/Context;Landroid/widget/ImageView;)V
+    .locals 4
 
-    invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+    invoke-direct {p0, p1}, Landroid/view/View;-><init>(Landroid/content/Context;)V
 
     iput-object p1, p0, Lcom/car/musiclite/LyricsBox;->ctx:Landroid/content/Context;
 
-    iput-object p2, p0, Lcom/car/musiclite/LyricsBox;->view:Landroid/widget/TextView;
-
-    iput-object p3, p0, Lcom/car/musiclite/LyricsBox;->cover:Landroid/widget/ImageView;
+    iput-object p2, p0, Lcom/car/musiclite/LyricsBox;->cover:Landroid/widget/ImageView;
 
     new-instance v0, Landroid/os/Handler;
 
@@ -56,9 +65,111 @@
 
     const-string v0, "\u25cf"
 
-    invoke-virtual {p2, v0}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+    iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->msg:Ljava/lang/String;
+
+    # paints (density already carries the global UI scale, see MainActivity.initScale)
+    new-instance v0, Landroid/graphics/Paint;
+
+    const/16 v1, 0x1
+
+    invoke-direct {v0, v1}, Landroid/graphics/Paint;-><init>(I)V
+
+    iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->pMain:Landroid/graphics/Paint;
+
+    const/4 v1, -0x1
+
+    invoke-virtual {v0, v1}, Landroid/graphics/Paint;->setColor(I)V
+
+    const/16 v1, 0x6
+
+    invoke-direct {p0, v1}, Lcom/car/musiclite/LyricsBox;->dpF(I)F
+
+    move-result v1
+
+    const/4 v2, 0x0
+
+    const v3, 0x51ffffff    # ~32% white, tight glow under the main text
+
+    invoke-virtual {v0, v1, v2, v2, v3}, Landroid/graphics/Paint;->setShadowLayer(FFFI)V
+
+    new-instance v0, Landroid/graphics/Paint;
+
+    const/16 v1, 0x1
+
+    invoke-direct {v0, v1}, Landroid/graphics/Paint;-><init>(I)V
+
+    iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->pGlow:Landroid/graphics/Paint;
+
+    const/4 v1, 0x0
+
+    invoke-virtual {v0, v1}, Landroid/graphics/Paint;->setColor(I)V
+
+    const/16 v1, 0x10
+
+    invoke-direct {p0, v1}, Lcom/car/musiclite/LyricsBox;->dpF(I)F
+
+    move-result v1
+
+    const/4 v2, 0x0
+
+    const v3, 0x35ffffff    # ~21% white, wide halo pass
+
+    invoke-virtual {v0, v1, v2, v2, v3}, Landroid/graphics/Paint;->setShadowLayer(FFFI)V
+
+    new-instance v0, Landroid/graphics/Paint;
+
+    const/16 v1, 0x1
+
+    invoke-direct {v0, v1}, Landroid/graphics/Paint;-><init>(I)V
+
+    iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->pNbr:Landroid/graphics/Paint;
+
+    const/4 v1, -0x1
+
+    invoke-virtual {v0, v1}, Landroid/graphics/Paint;->setColor(I)V
+
+    new-instance v0, Landroid/graphics/Paint;
+
+    const/16 v1, 0x1
+
+    invoke-direct {v0, v1}, Landroid/graphics/Paint;-><init>(I)V
+
+    iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->pTr:Landroid/graphics/Paint;
+
+    new-instance v0, Landroid/graphics/Paint;
+
+    const/16 v1, 0x1
+
+    invoke-direct {v0, v1}, Landroid/graphics/Paint;-><init>(I)V
+
+    iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->pMsg:Landroid/graphics/Paint;
+
+    const/4 v1, -0x1
+
+    invoke-virtual {v0, v1}, Landroid/graphics/Paint;->setColor(I)V
 
     return-void
+.end method
+
+# design-px -> physical px using the global scale carried in density
+.method private dpF(I)F
+    .locals 2
+
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->getResources()Landroid/content/res/Resources;
+
+    move-result-object v0
+
+    invoke-virtual {v0}, Landroid/content/res/Resources;->getDisplayMetrics()Landroid/util/DisplayMetrics;
+
+    move-result-object v0
+
+    iget v0, v0, Landroid/util/DisplayMetrics;->density:F
+
+    int-to-float v1, p1
+
+    mul-float/2addr v1, v0
+
+    return v1
 .end method
 
 # filter target: credits block ("作词 : xxx" etc.) sits at the song start (<15s)
@@ -616,311 +727,13 @@
 # 7-row window around the current line; current row white/bold/1.3x with the
 # translation underneath, neighbors fade out by distance (Apple-style)
 .method private renderCore()V
-    .locals 10
+    .locals 0
 
-    iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
-
-    if-eqz v0, :cond_empty
-
-    array-length v2, v0
-
-    if-nez v2, :goto_go
-
-    :cond_empty
-    iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->view:Landroid/widget/TextView;
-
-    const-string v1, "\u6682\u65e0\u6b4c\u8bcd"
-
-    invoke-virtual {v0, v1}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
-
-    return-void
-
-    :goto_go
-    new-instance v0, Landroid/text/SpannableStringBuilder;
-
-    invoke-direct {v0}, Landroid/text/SpannableStringBuilder;-><init>()V
-
-    # window: curLine-3 .. curLine+3, clamped
-    iget v2, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
-
-    const/4 v6, 0x3
-
-    sub-int/2addr v2, v6
-
-    if-gez v2, :lo_ok
-
-    const/4 v2, 0x0
-
-    :lo_ok
-    iget v3, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
-
-    const/4 v6, 0x3
-
-    add-int/2addr v3, v6
-
-    iget-object v6, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
-
-    array-length v6, v6
-
-    add-int/lit8 v6, v6, -0x1
-
-    if-le v3, v6, :hi_ok
-
-    move v3, v6
-
-    :hi_ok
-    move v1, v2
-
-    :loop
-    if-gt v1, v3, :done
-
-    invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
-
-    move-result v2
-
-    if-lez v2, :nosep
-
-    const/16 v2, 0xa
-
-    invoke-virtual {v0, v2}, Landroid/text/SpannableStringBuilder;->append(C)Landroid/text/SpannableStringBuilder;
-
-    :nosep
-    invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
-
-    move-result v2           # span start
-
-    iget v6, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
-
-    if-ne v1, v6, :other
-
-    # ================= current line =================
-    const-string v4, "\u25cf "
-
-    invoke-virtual {v0, v4}, Landroid/text/SpannableStringBuilder;->append(Ljava/lang/CharSequence;)Landroid/text/SpannableStringBuilder;
-
-    iget-object v4, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
-
-    aget-object v4, v4, v1
-
-    invoke-virtual {v0, v4}, Landroid/text/SpannableStringBuilder;->append(Ljava/lang/CharSequence;)Landroid/text/SpannableStringBuilder;
-
-    invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
-
-    move-result v7           # span end
-
-    # white
-    new-instance v4, Landroid/text/style/ForegroundColorSpan;
-
-    const v6, -0x1
-
-    invoke-direct {v4, v6}, Landroid/text/style/ForegroundColorSpan;-><init>(I)V
-
-    const/16 v8, 0x21
-
-    invoke-virtual {v0, v4, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
-
-    # 1.3x
-    new-instance v4, Landroid/text/style/RelativeSizeSpan;
-
-    const v6, 0x3fa66666    # 1.3f
-
-    invoke-direct {v4, v6}, Landroid/text/style/RelativeSizeSpan;-><init>(F)V
-
-    const/16 v8, 0x21
-
-    invoke-virtual {v0, v4, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
-
-    # bold
-    new-instance v4, Landroid/text/style/StyleSpan;
-
-    const/4 v6, 0x1
-
-    invoke-direct {v4, v6}, Landroid/text/style/StyleSpan;-><init>(I)V
-
-    const/16 v8, 0x21
-
-    invoke-virtual {v0, v4, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
-
-    # translation line underneath
-    iget-object v4, p0, Lcom/car/musiclite/LyricsBox;->trans:Ljava/util/HashMap;
-
-    if-eqz v4, :norm
-
-    iget-object v5, p0, Lcom/car/musiclite/LyricsBox;->times:[I
-
-    if-eqz v5, :norm
-
-    aget v6, v5, v1
-
-    invoke-static {v6}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
-
-    move-result-object v5
-
-    invoke-virtual {v4, v5}, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;
-
-    move-result-object v4
-
-    check-cast v4, Ljava/lang/String;
-
-    if-eqz v4, :norm
-
-    invoke-virtual {v4}, Ljava/lang/String;->trim()Ljava/lang/String;
-
-    move-result-object v5
-
-    invoke-virtual {v5}, Ljava/lang/String;->isEmpty()Z
-
-    move-result v5
-
-    if-nez v5, :norm
-
-    const/16 v5, 0xa
-
-    invoke-virtual {v0, v5}, Landroid/text/SpannableStringBuilder;->append(C)Landroid/text/SpannableStringBuilder;
-
-    invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
-
-    move-result v2           # translation span start
-
-    invoke-virtual {v0, v4}, Landroid/text/SpannableStringBuilder;->append(Ljava/lang/CharSequence;)Landroid/text/SpannableStringBuilder;
-
-    invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
-
-    move-result v7           # translation span end
-
-    # sub color @ alpha 210
-    invoke-static {}, Lcom/car/musiclite/MainActivity;->textSub()I
-
-    move-result v6
-
-    invoke-static {v6}, Landroid/graphics/Color;->red(I)I
-
-    move-result v8
-
-    invoke-static {v6}, Landroid/graphics/Color;->green(I)I
-
-    move-result v9
-
-    invoke-static {v6}, Landroid/graphics/Color;->blue(I)I
-
-    move-result v6
-
-    const/16 v5, 0xd2
-
-    invoke-static {v5, v8, v9, v6}, Landroid/graphics/Color;->argb(IIII)I
-
-    move-result v5
-
-    new-instance v4, Landroid/text/style/ForegroundColorSpan;
-
-    invoke-direct {v4, v5}, Landroid/text/style/ForegroundColorSpan;-><init>(I)V
-
-    const/16 v8, 0x21
-
-    invoke-virtual {v0, v4, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
-
-    # 0.8x
-    new-instance v4, Landroid/text/style/RelativeSizeSpan;
-
-    const v6, 0x3f4ccccd    # 0.8f
-
-    invoke-direct {v4, v6}, Landroid/text/style/RelativeSizeSpan;-><init>(F)V
-
-    const/16 v8, 0x21
-
-    invoke-virtual {v0, v4, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
-
-    goto :norm
-
-    # ================= neighbor lines =================
-    :other
-    iget v6, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
-
-    sub-int v6, v1, v6
-
-    if-gez v6, :d_pos
-
-    neg-int v6, v6
-
-    :d_pos
-    const/16 v8, 0x32        # 50
-
-    mul-int/2addr v8, v6
-
-    rsub-int v6, v8, 0xff    # alpha = 255 - 50*distance
-
-    const/16 v8, 0x5a        # floor 90
-
-    if-ge v6, v8, :alpha_ok
-
-    const/16 v6, 0x5a
-
-    :alpha_ok
-    invoke-static {}, Lcom/car/musiclite/MainActivity;->textSub()I
-
-    move-result v9
-
-    invoke-static {v9}, Landroid/graphics/Color;->red(I)I
-
-    move-result v7
-
-    invoke-static {v9}, Landroid/graphics/Color;->green(I)I
-
-    move-result v8
-
-    invoke-static {v9}, Landroid/graphics/Color;->blue(I)I
-
-    move-result v9
-
-    invoke-static {v6, v7, v8, v9}, Landroid/graphics/Color;->argb(IIII)I
-
-    move-result v6
-
-    iget-object v4, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
-
-    aget-object v4, v4, v1
-
-    invoke-virtual {v0, v4}, Landroid/text/SpannableStringBuilder;->append(Ljava/lang/CharSequence;)Landroid/text/SpannableStringBuilder;
-
-    invoke-virtual {v0}, Landroid/text/SpannableStringBuilder;->length()I
-
-    move-result v7           # span end
-
-    new-instance v5, Landroid/text/style/ForegroundColorSpan;
-
-    invoke-direct {v5, v6}, Landroid/text/style/ForegroundColorSpan;-><init>(I)V
-
-    const/16 v8, 0x21
-
-    invoke-virtual {v0, v5, v2, v7, v8}, Landroid/text/SpannableStringBuilder;->setSpan(Ljava/lang/Object;III)V
-
-    # normalize temp registers so both branch paths merge with equal types
-    :norm
-    const/4 v2, 0x0
-
-    const/4 v4, 0x0
-
-    const/4 v5, 0x0
-
-    const/4 v6, 0x0
-
-    const/4 v7, 0x0
-
-    const/4 v8, 0x0
-
-    const/4 v9, 0x0
-
-    add-int/lit8 v1, v1, 0x1
-
-    goto :loop
-
-    :done
-    iget-object v1, p0, Lcom/car/musiclite/LyricsBox;->view:Landroid/widget/TextView;
-
-    invoke-virtual {v1, v0}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->postInvalidate()V
 
     return-void
 .end method
+
 
 .method private sync(I)V
     .locals 6
@@ -1101,6 +914,11 @@
 
     iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->trans:Ljava/util/HashMap;
 
+    # drop any word-level data of the previous song
+    sput-object v0, Lcom/car/musiclite/LyricsBox;->sYChars:[[Ljava/lang/String;
+
+    sput-object v0, Lcom/car/musiclite/LyricsBox;->sYW:[[I
+
     # diag: log every (re)load trigger
     const-string v0, "MusicLite.Lyric"
 
@@ -1120,11 +938,11 @@
 
     invoke-static {v0, v1}, Landroid/util/Log;->i(Ljava/lang/String;Ljava/lang/String;)I
 
-    iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->view:Landroid/widget/TextView;
+    const-string v0, "\u6b4c\u8bcd\u52a0\u8f7d\u4e2d\u2026"
 
-    const-string v1, "\u6b4c\u8bcd\u52a0\u8f7d\u4e2d\u2026"
+    iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->msg:Ljava/lang/String;
 
-    invoke-virtual {v0, v1}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->postInvalidate()V
 
     iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->cover:Landroid/widget/ImageView;
 
@@ -1162,11 +980,11 @@
     goto :cond_ret
 
     :cond_show_none
-    iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->view:Landroid/widget/TextView;
+    const-string v0, "\u672a\u5728\u64ad\u653e"
 
-    const-string v1, "\u672a\u5728\u64ad\u653e"
+    iput-object v0, p0, Lcom/car/musiclite/LyricsBox;->msg:Ljava/lang/String;
 
-    invoke-virtual {v0, v1}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->postInvalidate()V
 
     iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->cover:Landroid/widget/ImageView;
 
@@ -1204,7 +1022,7 @@
 
     invoke-virtual {v0, v1, v2}, Ljava/lang/StringBuilder;->append(J)Ljava/lang/StringBuilder;
 
-    const-string v1, ",\"lv\":-1,\"kv\":-1,\"tv\":-1,\"rv\":-1}"
+    const-string v1, ",\"lv\":-1,\"kv\":-1,\"tv\":-1,\"rv\":-1,\"yv\":-1}"
 
     invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
@@ -1245,6 +1063,45 @@
     move-result v0
 
     if-eqz v0, :goto_cover
+
+    # word-level lyrics (yrc) - optional, failure must not block rendering
+    :try_start_y
+    const-string v1, "yrc"
+
+    invoke-virtual {v5, v1}, Lorg/json/JSONObject;->optJSONObject(Ljava/lang/String;)Lorg/json/JSONObject;
+
+    move-result-object v1
+
+    if-eqz v1, :y_done
+
+    const-string v2, "lyric"
+
+    invoke-virtual {v1, v2}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v1
+
+    invoke-direct {p0, v1}, Lcom/car/musiclite/LyricsBox;->parseYrc(Ljava/lang/String;)V
+
+    # yrc rows override the LRC row timeline (word-level rows are the same lines)
+    sget-object v1, Lcom/car/musiclite/LyricsBox;->sYChars:[[Ljava/lang/String;
+
+    if-eqz v1, :y_done
+
+    array-length v1, v1
+
+    if-lez v1, :y_done
+
+    sget-object v1, Lcom/car/musiclite/LyricsBox;->sYRowStart:[I
+
+    iput-object v1, p0, Lcom/car/musiclite/LyricsBox;->times:[I
+
+    sget-object v1, Lcom/car/musiclite/LyricsBox;->sYRowText:[Ljava/lang/String;
+
+    iput-object v1, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
+
+    :y_done
+    :try_end_y
+    .catch Ljava/lang/Throwable; {:try_start_y .. :try_end_y} :goto_catch_a
 
     # persist for in-place rebuilds (theme switch restores without refetch)
     iget-wide v1, p0, Lcom/car/musiclite/LyricsBox;->pendingId:J
@@ -1289,6 +1146,14 @@
     :try_end_t
     .catch Ljava/lang/Throwable; {:try_start_t .. :try_end_t} :goto_catch_t
 
+    # re-anchor translation keys to the yrc row timeline (after tlyric parsed)
+    sget-object v1, Lcom/car/musiclite/LyricsBox;->sYChars:[[Ljava/lang/String;
+
+    if-eqz v1, :skip_anchor
+
+    invoke-direct {p0}, Lcom/car/musiclite/LyricsBox;->anchorTrans()V
+
+    :skip_anchor
     goto :goto_render
 
     :goto_catch_t
@@ -1447,5 +1312,1263 @@
     move-exception v0
 
     :cond_cover_end
+    return-void
+.end method
+
+
+.method public static constructor <clinit>()V
+    .locals 1
+
+    const-string v0, "\\((\\d+),(\\d+),\\d+\\)"
+
+    invoke-static {v0}, Ljava/util/regex/Pattern;->compile(Ljava/lang/String;)Ljava/util/regex/Pattern;
+
+    move-result-object v0
+
+    sput-object v0, Lcom/car/musiclite/LyricsBox;->sPat:Ljava/util/regex/Pattern;
+
+    return-void
+.end method
+
+# ---- extract words of one yrc row. returns joined row text, null = skip ----
+# every failure path returns directly from its own label (no cross-type merges)
+# ---- parseInt wrapper: returns -1 on failure (keeps parseRow free of try/catch) ----
+.method private static safeParseInt(Ljava/lang/String;)I
+    .locals 2
+
+.catch Ljava/lang/Throwable; {:ts .. :te} :te
+    :ts
+    invoke-static {p0}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I
+
+    move-result v0
+
+    return v0
+
+    :te
+    move-exception v1
+
+    const/4 v0, -0x1
+
+    return v0
+.end method
+
+.method private static parseRow(Ljava/lang/String;Ljava/util/ArrayList;Ljava/util/ArrayList;Ljava/util/ArrayList;I)Ljava/lang/String;
+    .locals 8
+
+    const/16 v0, 0x5d
+
+    invoke-virtual {p0, v0}, Ljava/lang/String;->indexOf(I)I
+
+    move-result v0
+
+    if-ltz v0, :f0
+
+    add-int/lit8 v0, v0, 0x1    # prev = after ']'
+
+    sget-object v1, Lcom/car/musiclite/LyricsBox;->sPat:Ljava/util/regex/Pattern;
+
+    invoke-virtual {v1, p0}, Ljava/util/regex/Pattern;->matcher(Ljava/lang/CharSequence;)Ljava/util/regex/Matcher;
+
+    move-result-object v1
+
+    new-instance v2, Ljava/lang/StringBuffer;
+
+    invoke-direct {v2}, Ljava/lang/StringBuffer;-><init>()V
+
+    :wfind
+    invoke-virtual {v1}, Ljava/util/regex/Matcher;->find()Z
+
+    move-result v3
+
+    if-eqz v3, :wdone
+
+    const/4 v4, 0x1
+
+    invoke-virtual {v1, v4}, Ljava/util/regex/Matcher;->group(I)Ljava/lang/String;
+
+    move-result-object v4
+
+    invoke-static {v4}, Lcom/car/musiclite/LyricsBox;->safeParseInt(Ljava/lang/String;)I
+
+    move-result v4
+
+    if-ltz v4, :f1
+
+    const/4 v5, 0x2
+
+    invoke-virtual {v1, v5}, Ljava/util/regex/Matcher;->group(I)Ljava/lang/String;
+
+    move-result-object v5
+
+    invoke-static {v5}, Lcom/car/musiclite/LyricsBox;->safeParseInt(Ljava/lang/String;)I
+
+    move-result v5
+
+    if-ltz v5, :f2
+
+    invoke-virtual {v1}, Ljava/util/regex/Matcher;->start()I
+
+    move-result v6
+
+    invoke-virtual {p0, v0, v6}, Ljava/lang/String;->substring(II)Ljava/lang/String;
+
+    move-result-object v6
+
+    invoke-virtual {v2, v6}, Ljava/lang/StringBuffer;->append(Ljava/lang/String;)Ljava/lang/StringBuffer;
+
+    invoke-virtual {v6}, Ljava/lang/String;->trim()Ljava/lang/String;
+
+    move-result-object v6
+
+    invoke-virtual {v6}, Ljava/lang/String;->isEmpty()Z
+
+    move-result v7
+
+    if-nez v7, :no_word
+
+    invoke-virtual {p1, v6}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+
+    invoke-static {v4}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    move-result-object v6
+
+    invoke-virtual {p2, v6}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+
+    invoke-static {v5}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    move-result-object v6
+
+    invoke-virtual {p3, v6}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+
+    :no_word
+    invoke-virtual {v1}, Ljava/util/regex/Matcher;->end()I
+
+    move-result v0
+
+    goto :wfind
+
+    :wdone
+    invoke-virtual {p0}, Ljava/lang/String;->length()I
+
+    move-result v6
+
+    invoke-virtual {p0, v0, v6}, Ljava/lang/String;->substring(II)Ljava/lang/String;
+
+    move-result-object v6
+
+    invoke-virtual {v2, v6}, Ljava/lang/StringBuffer;->append(Ljava/lang/String;)Ljava/lang/StringBuffer;
+
+    invoke-virtual {p1}, Ljava/util/ArrayList;->size()I
+
+    move-result v6
+
+    if-lez v6, :f3
+
+    const/16 v6, 0x3a98
+
+    if-ge p4, v6, :r_join
+
+    invoke-virtual {v2}, Ljava/lang/StringBuffer;->toString()Ljava/lang/String;
+
+    move-result-object v6
+
+    const/16 v7, 0x3a
+
+    invoke-virtual {v6, v7}, Ljava/lang/String;->indexOf(I)I
+
+    move-result v6
+
+    if-gez v6, :f4
+
+    :r_join
+    invoke-virtual {v2}, Ljava/lang/StringBuffer;->toString()Ljava/lang/String;
+
+    move-result-object v0
+
+    return-object v0
+
+    :f0
+    const/4 v0, 0x0
+
+    return-object v0
+
+    :f1
+    const/4 v0, 0x0
+
+    return-object v0
+
+    :f2
+    const/4 v0, 0x0
+
+    return-object v0
+
+    :f3
+    const/4 v0, 0x0
+
+    return-object v0
+
+    :f4
+    const/4 v0, 0x0
+
+    return-object v0
+.end method
+
+# ---- int[] {s0,d0,s1,d1,...} from two Integer lists ----
+.method private packPairs(Ljava/util/ArrayList;Ljava/util/ArrayList;)[I
+    .locals 7
+
+    invoke-virtual {p1}, Ljava/util/ArrayList;->size()I
+
+    move-result v0
+
+    shl-int/lit8 v0, v0, 0x1
+
+    new-array v1, v0, [I
+
+    const/4 v2, 0x0
+
+    :lp
+    invoke-virtual {p1}, Ljava/util/ArrayList;->size()I
+
+    move-result v3
+
+    if-ge v2, v3, :done
+
+    invoke-virtual {p1, v2}, Ljava/util/ArrayList;->get(I)Ljava/lang/Object;
+
+    move-result-object v4
+
+    check-cast v4, Ljava/lang/Integer;
+
+    invoke-virtual {v4}, Ljava/lang/Integer;->intValue()I
+
+    move-result v4
+
+    invoke-virtual {p2, v2}, Ljava/util/ArrayList;->get(I)Ljava/lang/Object;
+
+    move-result-object v5
+
+    check-cast v5, Ljava/lang/Integer;
+
+    invoke-virtual {v5}, Ljava/lang/Integer;->intValue()I
+
+    move-result v5
+
+    shl-int/lit8 v6, v2, 0x1
+
+    aput v4, v1, v6
+
+    add-int/lit8 v6, v6, 0x1
+
+    aput v5, v1, v6
+
+    add-int/lit8 v2, v2, 0x1
+
+    goto :lp
+
+    :done
+    return-object v1
+.end method
+
+# ---- yrc -> word arrays ----
+.method private parseYrc(Ljava/lang/String;)V
+    .locals 13
+
+    const/4 v0, 0x0
+
+    sput-object v0, Lcom/car/musiclite/LyricsBox;->sYChars:[[Ljava/lang/String;
+
+    sput-object v0, Lcom/car/musiclite/LyricsBox;->sYW:[[I
+
+    sput-object v0, Lcom/car/musiclite/LyricsBox;->sYRowStart:[I
+
+    sput-object v0, Lcom/car/musiclite/LyricsBox;->sYRowText:[Ljava/lang/String;
+
+    if-eqz p1, :p_end
+
+    new-instance v0, Ljava/util/ArrayList;
+
+    invoke-direct {v0}, Ljava/util/ArrayList;-><init>()V
+
+    new-instance v1, Ljava/util/ArrayList;
+
+    invoke-direct {v1}, Ljava/util/ArrayList;-><init>()V
+
+    new-instance v2, Ljava/util/ArrayList;
+
+    invoke-direct {v2}, Ljava/util/ArrayList;-><init>()V
+
+    new-instance v3, Ljava/util/ArrayList;
+
+    invoke-direct {v3}, Ljava/util/ArrayList;-><init>()V
+
+    const-string v4, "\n"
+
+    invoke-virtual {p1, v4}, Ljava/lang/String;->split(Ljava/lang/String;)[Ljava/lang/String;
+
+    move-result-object v4
+
+    const/4 v5, 0x0
+
+    :row_loop
+    array-length v6, v4
+
+    if-ge v5, v6, :rows_done
+
+    aget-object v6, v4, v5
+
+    add-int/lit8 v5, v5, 0x1
+
+    const/16 v7, 0x5b
+
+    invoke-virtual {v6, v7}, Ljava/lang/String;->indexOf(I)I
+
+    move-result v7
+
+    if-ltz v7, :norm_loop
+
+    const/16 v8, 0x2c
+
+    invoke-virtual {v6, v8, v7}, Ljava/lang/String;->indexOf(II)I
+
+    move-result v8
+
+    if-ltz v8, :norm_loop
+
+    const/16 v9, 0x5d
+
+    invoke-virtual {v6, v9, v8}, Ljava/lang/String;->indexOf(II)I
+
+    move-result v9
+
+    if-ltz v9, :norm_loop
+
+    add-int/lit8 v10, v7, 0x1
+
+    invoke-virtual {v6, v10, v8}, Ljava/lang/String;->substring(II)Ljava/lang/String;
+
+    move-result-object v10
+
+.catch Ljava/lang/Throwable; {:ps .. :xs} :xs
+    :ps
+    invoke-static {v10}, Ljava/lang/Integer;->parseInt(Ljava/lang/String;)I
+
+    move-result v10
+
+    goto :pk
+    :xs
+    move-exception v11
+
+    const/4 v11, 0x0
+
+    goto :norm_loop
+    :pk
+    new-instance v7, Ljava/util/ArrayList;
+
+    invoke-direct {v7}, Ljava/util/ArrayList;-><init>()V
+
+    new-instance v8, Ljava/util/ArrayList;
+
+    invoke-direct {v8}, Ljava/util/ArrayList;-><init>()V
+
+    new-instance v9, Ljava/util/ArrayList;
+
+    invoke-direct {v9}, Ljava/util/ArrayList;-><init>()V
+
+    invoke-static/range {v6 .. v10}, Lcom/car/musiclite/LyricsBox;->parseRow(Ljava/lang/String;Ljava/util/ArrayList;Ljava/util/ArrayList;Ljava/util/ArrayList;I)Ljava/lang/String;
+
+    move-result-object v11
+
+    if-eqz v11, :norm_loop
+
+    invoke-virtual {v7}, Ljava/util/ArrayList;->size()I
+
+    move-result v12
+
+    if-lez v12, :norm_loop
+
+    new-array v12, v12, [Ljava/lang/String;
+
+    invoke-virtual {v7, v12}, Ljava/util/ArrayList;->toArray([Ljava/lang/Object;)[Ljava/lang/Object;
+
+    move-result-object v12
+
+    check-cast v12, [Ljava/lang/String;
+
+    invoke-virtual {v0, v12}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+
+    invoke-direct {p0, v8, v9}, Lcom/car/musiclite/LyricsBox;->packPairs(Ljava/util/ArrayList;Ljava/util/ArrayList;)[I
+
+    move-result-object v12
+
+    invoke-virtual {v1, v12}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+
+    invoke-static {v10}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    move-result-object v12
+
+    invoke-virtual {v2, v12}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+
+    invoke-virtual {v3, v11}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+
+    :norm_loop
+    const/4 v6, 0x0
+
+    const/4 v7, 0x0
+
+    const/4 v8, 0x0
+
+    const/4 v9, 0x0
+
+    const/4 v10, 0x0
+
+    const/4 v11, 0x0
+
+    const/4 v12, 0x0
+
+    goto :row_loop
+
+    :rows_done
+    invoke-virtual {v0}, Ljava/util/ArrayList;->size()I
+
+    move-result v5
+
+    if-lez v5, :p_end
+
+    new-array v6, v5, [I
+
+    const/4 v7, 0x0
+
+    :frs
+    if-ge v7, v5, :frs_done
+
+    invoke-virtual {v2, v7}, Ljava/util/ArrayList;->get(I)Ljava/lang/Object;
+
+    move-result-object v8
+
+    check-cast v8, Ljava/lang/Integer;
+
+    invoke-virtual {v8}, Ljava/lang/Integer;->intValue()I
+
+    move-result v8
+
+    aput v8, v6, v7
+
+    add-int/lit8 v7, v7, 0x1
+
+    goto :frs
+
+    :frs_done
+    new-array v8, v5, [[Ljava/lang/String;
+
+    invoke-virtual {v0, v8}, Ljava/util/ArrayList;->toArray([Ljava/lang/Object;)[Ljava/lang/Object;
+
+    move-result-object v8
+
+    check-cast v8, [[Ljava/lang/String;
+
+    new-array v9, v5, [[I
+
+    invoke-virtual {v1, v9}, Ljava/util/ArrayList;->toArray([Ljava/lang/Object;)[Ljava/lang/Object;
+
+    move-result-object v9
+
+    check-cast v9, [[I
+
+    new-array v10, v5, [Ljava/lang/String;
+
+    invoke-virtual {v3, v10}, Ljava/util/ArrayList;->toArray([Ljava/lang/Object;)[Ljava/lang/Object;
+
+    move-result-object v10
+
+    check-cast v10, [Ljava/lang/String;
+
+    sput-object v8, Lcom/car/musiclite/LyricsBox;->sYChars:[[Ljava/lang/String;
+
+    sput-object v9, Lcom/car/musiclite/LyricsBox;->sYW:[[I
+
+    sput-object v6, Lcom/car/musiclite/LyricsBox;->sYRowStart:[I
+
+    sput-object v10, Lcom/car/musiclite/LyricsBox;->sYRowText:[Ljava/lang/String;
+
+    return-void
+
+    :p_end
+    return-void
+.end method
+
+# ---- translation lookup by row time ----
+.method private transAt(I)Ljava/lang/String;
+    .locals 3
+
+    iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->trans:Ljava/util/HashMap;
+
+    if-eqz v0, :ret_n
+
+    invoke-static {p1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    move-result-object v1
+
+    invoke-virtual {v0, v1}, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;
+
+    move-result-object v0
+
+    check-cast v0, Ljava/lang/String;
+
+    return-object v0
+
+    :ret_n
+    const/4 v0, 0x0
+
+    return-object v0
+.end method
+
+# ---- re-anchor translation keys from LRC timeline to yrc row timeline ----
+.method private anchorTrans()V
+    .locals 14
+
+    iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->trans:Ljava/util/HashMap;
+
+    if-eqz v0, :a_ret
+
+    sget-object v1, Lcom/car/musiclite/LyricsBox;->sYRowStart:[I
+
+    if-eqz v1, :a_ret
+
+    new-instance v2, Ljava/util/HashMap;
+
+    invoke-direct {v2}, Ljava/util/HashMap;-><init>()V
+
+    array-length v3, v1
+
+    const/4 v4, 0x0
+
+    :row_loop
+    if-ge v4, v3, :rows_done
+
+    aget v5, v1, v4
+
+    add-int/lit8 v4, v4, 0x1
+
+    invoke-virtual {v0}, Ljava/util/HashMap;->keySet()Ljava/util/Set;
+
+    move-result-object v6
+
+    invoke-interface {v6}, Ljava/util/Set;->iterator()Ljava/util/Iterator;
+
+    move-result-object v6
+
+    const/4 v10, -0x1        # best key (int)
+
+    const v11, 0x7fffffff    # best diff (int)
+
+    :it_loop
+    invoke-interface {v6}, Ljava/util/Iterator;->hasNext()Z
+
+    move-result v7
+
+    if-eqz v7, :it_done
+
+    invoke-interface {v6}, Ljava/util/Iterator;->next()Ljava/lang/Object;
+
+    move-result-object v7
+
+    check-cast v7, Ljava/lang/Integer;
+
+    invoke-virtual {v7}, Ljava/lang/Integer;->intValue()I
+
+    move-result v7
+
+    sub-int v8, v7, v5
+
+    if-ltz v8, :abs_d
+
+    neg-int v8, v8
+
+    :abs_d
+    const/16 v9, 0x78
+
+    if-gt v8, v9, :it_loop
+
+    if-ge v8, v11, :it_loop
+
+    move v11, v8
+
+    move v10, v7
+
+    goto :it_loop
+
+    :it_done
+    if-ltz v10, :row_norm
+
+    invoke-static {v10}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    move-result-object v7
+
+    invoke-virtual {v0, v7}, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;
+
+    move-result-object v12
+
+    if-eqz v12, :row_norm2
+
+    invoke-static {v5}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    move-result-object v7
+
+    invoke-virtual {v2, v7, v12}, Ljava/util/HashMap;->put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+
+    const/4 v7, 0x0
+
+    const/4 v8, 0x0
+
+    const/4 v9, 0x0
+
+    const/4 v12, 0x0
+
+    goto :row_loop
+
+    :row_norm2
+    const/4 v7, 0x0
+
+    const/4 v8, 0x0
+
+    const/4 v9, 0x0
+
+    const/4 v12, 0x0
+
+    goto :row_loop
+
+    :row_norm
+    const/4 v7, 0x0
+
+    const/4 v8, 0x0
+
+    const/4 v9, 0x0
+
+    const/4 v12, 0x0
+
+    goto :row_loop
+
+    :rows_done
+    iput-object v2, p0, Lcom/car/musiclite/LyricsBox;->trans:Ljava/util/HashMap;
+
+    sput-object v2, Lcom/car/musiclite/LyricsBox;->sTrans:Ljava/util/HashMap;
+
+    :a_ret
+    return-void
+.end method
+
+# ---- current row renderer: word-level if yrc exists, else whole-line ----
+.method private drawCurRow(Landroid/graphics/Canvas;III)V
+    .locals 10
+
+    sget-object v0, Lcom/car/musiclite/LyricsBox;->sYChars:[[Ljava/lang/String;
+
+    if-eqz v0, :plain
+
+    array-length v1, v0
+
+    if-ge p2, v1, :plain
+
+    aget-object v0, v0, p2
+
+    sget-object v1, Lcom/car/musiclite/LyricsBox;->sYW:[[I
+
+    if-eqz v1, :plain
+
+    array-length v2, v1
+
+    if-ge p2, v2, :plain
+
+    aget-object v1, v1, p2
+
+    if-eqz v1, :plain
+
+    const/16 v2, 0x1e
+
+    invoke-direct {p0, v2}, Lcom/car/musiclite/LyricsBox;->dpF(I)F
+
+    move-result v2
+
+    iget-object v3, p0, Lcom/car/musiclite/LyricsBox;->pMain:Landroid/graphics/Paint;
+
+    invoke-virtual {v3, v2}, Landroid/graphics/Paint;->setTextSize(F)V
+
+    iget-object v3, p0, Lcom/car/musiclite/LyricsBox;->pGlow:Landroid/graphics/Paint;
+
+    invoke-virtual {v3, v2}, Landroid/graphics/Paint;->setTextSize(F)V
+
+    # baseline (v9) = (float)cy + size*0.35
+    const v9, 0x3eb33333    # 0.35f
+
+    mul-float/2addr v2, v9
+
+    int-to-float v9, p3
+
+    add-float/2addr v9, v2
+
+    const/4 v2, 0x0          # total width (float)
+
+    const/4 v3, 0x0          # i
+
+    :mt
+    array-length v4, v0
+
+    if-ge v3, v4, :mt_done
+
+    aget-object v4, v0, v3
+
+    iget-object v5, p0, Lcom/car/musiclite/LyricsBox;->pMain:Landroid/graphics/Paint;
+
+    invoke-virtual {v5, v4}, Landroid/graphics/Paint;->measureText(Ljava/lang/String;)F
+
+    move-result v4
+
+    add-float/2addr v2, v4
+
+    add-int/lit8 v3, v3, 0x1
+
+    goto :mt
+
+    :mt_done
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->getWidth()I
+
+    move-result v3
+
+    int-to-float v3, v3
+
+    const/high16 v4, 0x3f000000
+
+    mul-float/2addr v3, v4
+
+    mul-float/2addr v2, v4
+
+    sub-float v3, v3, v2      # x cursor
+
+    const/4 v4, 0x0
+
+    :wd
+    array-length v5, v0
+
+    if-ge v4, v5, :wd_done
+
+    aget-object v5, v0, v4
+
+    shl-int/lit8 v6, v4, 0x1
+
+    aget v6, v1, v6           # word start (ms)
+
+    const/16 v7, 0xff
+
+    if-lt p4, v6, :unp
+
+    goto :set_a
+    :unp
+    const/16 v7, 0x73
+    :set_a
+    iget-object v8, p0, Lcom/car/musiclite/LyricsBox;->pMain:Landroid/graphics/Paint;
+
+    invoke-virtual {v8, v7}, Landroid/graphics/Paint;->setAlpha(I)V
+
+    iget-object v8, p0, Lcom/car/musiclite/LyricsBox;->pGlow:Landroid/graphics/Paint;
+
+    invoke-virtual {p1, v5, v3, v9, v8}, Landroid/graphics/Canvas;->drawText(Ljava/lang/String;FFLandroid/graphics/Paint;)V
+
+    iget-object v8, p0, Lcom/car/musiclite/LyricsBox;->pMain:Landroid/graphics/Paint;
+
+    invoke-virtual {p1, v5, v3, v9, v8}, Landroid/graphics/Canvas;->drawText(Ljava/lang/String;FFLandroid/graphics/Paint;)V
+
+    iget-object v8, p0, Lcom/car/musiclite/LyricsBox;->pMain:Landroid/graphics/Paint;
+
+    invoke-virtual {v8, v5}, Landroid/graphics/Paint;->measureText(Ljava/lang/String;)F
+
+    move-result v8
+
+    add-float/2addr v3, v8
+
+    add-int/lit8 v4, v4, 0x1
+
+    goto :wd
+
+    :wd_done
+    const/4 v4, 0x0
+
+    aget v4, v1, v4
+
+    invoke-direct {p0, v4}, Lcom/car/musiclite/LyricsBox;->transAt(I)Ljava/lang/String;
+
+    move-result-object v4
+
+    if-eqz v4, :r_null
+
+    invoke-virtual {v4}, Ljava/lang/String;->isEmpty()Z
+
+    move-result v5
+
+    if-nez v5, :r_null
+
+    iget-object v5, p0, Lcom/car/musiclite/LyricsBox;->pTr:Landroid/graphics/Paint;
+
+    const/16 v6, 0x11
+
+    invoke-direct {p0, v6}, Lcom/car/musiclite/LyricsBox;->dpF(I)F
+
+    move-result v6
+
+    invoke-virtual {v5, v6}, Landroid/graphics/Paint;->setTextSize(F)V
+
+    const/16 v6, 0xa0
+
+    invoke-virtual {v5, v6}, Landroid/graphics/Paint;->setAlpha(I)V
+
+    sget-object v6, Landroid/graphics/Paint$Align;->CENTER:Landroid/graphics/Paint$Align;
+
+    invoke-virtual {v5, v6}, Landroid/graphics/Paint;->setTextAlign(Landroid/graphics/Paint$Align;)V
+
+    invoke-virtual {v5}, Landroid/graphics/Paint;->getTextSize()F
+
+    move-result v6
+
+    const/high16 v7, 0x40000000
+
+    mul-float/2addr v6, v7
+
+    add-float/2addr v6, v9
+
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->getWidth()I
+
+    move-result v7
+
+    int-to-float v7, v7
+
+    const/high16 v8, 0x3f000000
+
+    mul-float/2addr v7, v8
+
+    invoke-virtual {p1, v4, v7, v6, v5}, Landroid/graphics/Canvas;->drawText(Ljava/lang/String;FFLandroid/graphics/Paint;)V
+
+    return-void
+
+    :r_null
+    return-void
+
+    :plain
+    iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
+
+    if-eqz v0, :pr1
+
+    array-length v1, v0
+
+    if-ge p2, v1, :pr2
+
+    aget-object v0, v0, p2
+
+    const/16 v1, 0x1e
+
+    invoke-direct {p0, v1}, Lcom/car/musiclite/LyricsBox;->dpF(I)F
+
+    move-result v2
+
+    iget-object v3, p0, Lcom/car/musiclite/LyricsBox;->pMain:Landroid/graphics/Paint;
+
+    invoke-virtual {v3, v2}, Landroid/graphics/Paint;->setTextSize(F)V
+
+    iget-object v4, p0, Lcom/car/musiclite/LyricsBox;->pGlow:Landroid/graphics/Paint;
+
+    invoke-virtual {v4, v2}, Landroid/graphics/Paint;->setTextSize(F)V
+
+    const v5, 0x3eb33333
+
+    mul-float/2addr v2, v5
+
+    # baseline = (float)cy + size*0.35 (v9)
+    int-to-float v9, p3
+
+    add-float/2addr v9, v2
+
+    sget-object v5, Landroid/graphics/Paint$Align;->CENTER:Landroid/graphics/Paint$Align;
+
+    invoke-virtual {v3, v5}, Landroid/graphics/Paint;->setTextAlign(Landroid/graphics/Paint$Align;)V
+
+    invoke-virtual {v4, v5}, Landroid/graphics/Paint;->setTextAlign(Landroid/graphics/Paint$Align;)V
+
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->getWidth()I
+
+    move-result v5
+
+    int-to-float v5, v5
+
+    const/high16 v6, 0x3f000000
+
+    mul-float/2addr v5, v6
+
+    invoke-virtual {p1, v0, v5, v9, v4}, Landroid/graphics/Canvas;->drawText(Ljava/lang/String;FFLandroid/graphics/Paint;)V
+
+    invoke-virtual {p1, v0, v5, v9, v3}, Landroid/graphics/Canvas;->drawText(Ljava/lang/String;FFLandroid/graphics/Paint;)V
+
+    iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->times:[I
+
+    if-eqz v0, :pr3
+
+    array-length v1, v0
+
+    if-ge p2, v1, :pr4
+
+    aget v0, v0, p2
+
+    invoke-direct {p0, v0}, Lcom/car/musiclite/LyricsBox;->transAt(I)Ljava/lang/String;
+
+    move-result-object v0
+
+    if-eqz v0, :pr5
+
+    invoke-virtual {v0}, Ljava/lang/String;->isEmpty()Z
+
+    move-result v1
+
+    if-nez v1, :pr6
+
+    iget-object v1, p0, Lcom/car/musiclite/LyricsBox;->pTr:Landroid/graphics/Paint;
+
+    const/16 v2, 0x11
+
+    invoke-direct {p0, v2}, Lcom/car/musiclite/LyricsBox;->dpF(I)F
+
+    move-result v2
+
+    invoke-virtual {v1, v2}, Landroid/graphics/Paint;->setTextSize(F)V
+
+    const/16 v2, 0xa0
+
+    invoke-virtual {v1, v2}, Landroid/graphics/Paint;->setAlpha(I)V
+
+    invoke-virtual {v1}, Landroid/graphics/Paint;->getTextSize()F
+
+    move-result v2
+
+    const/high16 v3, 0x40000000
+
+    mul-float/2addr v2, v3
+
+    add-float/2addr v2, v9
+
+    invoke-virtual {p1, v0, v5, v2, v1}, Landroid/graphics/Canvas;->drawText(Ljava/lang/String;FFLandroid/graphics/Paint;)V
+
+    return-void
+
+    :pr1
+    return-void
+
+    :pr2
+    return-void
+
+    :pr3
+    return-void
+
+    :pr4
+    return-void
+
+    :pr5
+    return-void
+
+    :pr6
+    return-void
+.end method
+
+# ---- main painter ----
+.method protected onDraw(Landroid/graphics/Canvas;)V
+    .locals 6
+
+    invoke-direct {p0}, Lcom/car/musiclite/LyricsBox;->estPosMs()I
+
+    move-result v0
+
+    iget-object v1, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
+
+    if-eqz v1, :msg
+
+    array-length v2, v1
+
+    if-lez v2, :msg
+
+    invoke-direct {p0, p1, v0}, Lcom/car/musiclite/LyricsBox;->drawWindow(Landroid/graphics/Canvas;I)V
+
+    goto :sched
+
+    :msg
+    invoke-direct {p0, p1}, Lcom/car/musiclite/LyricsBox;->drawMsg(Landroid/graphics/Canvas;)V
+
+    :sched
+    sget-boolean v0, Lcom/car/musiclite/MainActivity;->sPlaying:Z
+
+    if-eqz v0, :slow
+
+    const-wide/16 v3, 0x21    # 33ms
+
+    goto :sch
+
+    :slow
+    const-wide/16 v3, 0x190   # 400ms
+
+    :sch
+    invoke-virtual {p0, v3, v4}, Lcom/car/musiclite/LyricsBox;->postInvalidateDelayed(J)V
+
+    return-void
+.end method
+
+# ---- lyrics window painter (rows + fading neighbors) ----
+.method private drawWindow(Landroid/graphics/Canvas;I)V
+    .locals 14
+
+    move/from16 v13, p2    # t (int ms)
+
+    iget-object v1, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
+
+    array-length v2, v1
+
+    if-lez v2, :w_ret
+
+    iget v3, p0, Lcom/car/musiclite/LyricsBox;->curLine:I
+
+    if-ltz v3, :c_lo
+
+    goto :c_hi
+    :c_lo
+    const/4 v3, 0x0
+    :c_hi
+    if-ge v3, v2, :c_hi_fix
+
+    goto :c_ok
+    :c_hi_fix
+    add-int/lit8 v3, v2, -0x1
+    :c_ok
+    add-int/lit8 v10, v3, -0x3
+
+    if-ltz v10, :w_lo_ok
+
+    const/4 v10, 0x0
+    :w_lo_ok
+    add-int/lit8 v11, v3, 0x3
+
+    add-int/lit8 v12, v2, -0x1
+
+    if-le v11, v12, :w_hi_ok
+
+    move v11, v12
+    :w_hi_ok
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->getWidth()I
+
+    move-result v6
+
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->getHeight()I
+
+    move-result v4
+
+    const/16 v5, 0x9
+
+    div-int v5, v4, v5
+
+    if-lez v5, :sh_ok
+
+    const/4 v5, 0x1
+    :sh_ok
+    sub-int v12, v3, v10    # iCur
+
+    move v7, v10
+
+    :loop
+    if-gt v7, v11, :loop_end
+
+    sub-int v8, v7, v10
+
+    if-le v8, v12, :slot_ok
+
+    add-int/lit8 v8, v8, 0x1
+    :slot_ok
+    mul-int/2addr v8, v5
+
+    div-int/lit8 v9, v5, 0x2
+
+    add-int/2addr v8, v9     # cy (slot center, int px)
+
+    if-eq v7, v3, :nbr
+
+    invoke-direct {p0, p1, v7, v8, v13}, Lcom/car/musiclite/LyricsBox;->drawCurRow(Landroid/graphics/Canvas;III)V
+
+    const/4 v8, 0x0
+
+    goto :next
+
+    :nbr
+    sub-int v2, v7, v3
+
+    if-ltz v2, :d_ok
+
+    neg-int v2, v2
+    :d_ok
+    add-int/lit8 v2, v2, -0x1
+
+    const/16 v9, 0x32
+
+    mul-int/2addr v2, v9
+
+    rsub-int v2, v2, 0xbe    # alpha = 190 - 50*(d-1)
+
+    invoke-direct {p0, p1, v7, v8, v2}, Lcom/car/musiclite/LyricsBox;->drawNbrRow(Landroid/graphics/Canvas;III)V
+
+    :next
+    const/4 v2, 0x0
+
+    const/4 v4, 0x0
+
+    const/4 v8, 0x0
+
+    const/4 v9, 0x0
+
+    add-int/lit8 v7, v7, 0x1
+
+    goto :loop
+
+    :loop_end
+    :w_ret
+    return-void
+.end method
+
+# ---- placeholder text painter ----
+.method private drawMsg(Landroid/graphics/Canvas;)V
+    .locals 7
+
+    iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->msg:Ljava/lang/String;
+
+    if-eqz v0, :def
+
+    goto :have
+    :def
+    const-string v0, "\u25cf"
+    :have
+    iget-object v1, p0, Lcom/car/musiclite/LyricsBox;->pMsg:Landroid/graphics/Paint;
+
+    sget-object v2, Landroid/graphics/Paint$Align;->CENTER:Landroid/graphics/Paint$Align;
+
+    invoke-virtual {v1, v2}, Landroid/graphics/Paint;->setTextAlign(Landroid/graphics/Paint$Align;)V
+
+    const/16 v3, 0x16
+
+    invoke-direct {p0, v3}, Lcom/car/musiclite/LyricsBox;->dpF(I)F
+
+    move-result v3
+
+    invoke-virtual {v1, v3}, Landroid/graphics/Paint;->setTextSize(F)V
+
+    const/16 v3, 0xb4
+
+    invoke-virtual {v1, v3}, Landroid/graphics/Paint;->setAlpha(I)V
+
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->getWidth()I
+
+    move-result v4
+
+    int-to-float v4, v4
+
+    const/high16 v5, 0x3f000000
+
+    mul-float/2addr v4, v5
+
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->getHeight()I
+
+    move-result v6
+
+    int-to-float v6, v6
+
+    mul-float/2addr v6, v5
+
+    invoke-virtual {p1, v0, v4, v6, v1}, Landroid/graphics/Canvas;->drawText(Ljava/lang/String;FFLandroid/graphics/Paint;)V
+
+    return-void
+.end method
+
+
+# ---- estimated playback position (ms): sPos + elapsed when playing ----
+.method private estPosMs()I
+    .locals 6
+
+    sget-boolean v0, Lcom/car/musiclite/MainActivity;->sPlaying:Z
+
+    if-eqz v0, :st
+
+    sget v1, Lcom/car/musiclite/MainActivity;->sPos:I
+
+    sget-wide v2, Lcom/car/musiclite/MainActivity;->sPosAt:J
+
+    invoke-static {}, Landroid/os/SystemClock;->uptimeMillis()J
+
+    move-result-wide v4
+
+    sub-long/2addr v4, v2
+
+    long-to-int v4, v4
+
+    add-int/2addr v1, v4
+
+    return v1
+
+    :st
+    sget v0, Lcom/car/musiclite/MainActivity;->sPos:I
+
+    return v0
+.end method
+
+# ---- neighbor row renderer (fading, centered, no glow) ----
+.method private drawNbrRow(Landroid/graphics/Canvas;III)V
+    .locals 6
+
+    iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->lines:[Ljava/lang/String;
+
+    if-eqz v0, :ret
+
+    array-length v1, v0
+
+    if-ge p2, v1, :ret
+
+    aget-object v2, v0, p2
+
+    iget-object v0, p0, Lcom/car/musiclite/LyricsBox;->pNbr:Landroid/graphics/Paint;
+
+    const/16 v1, 0x18
+
+    invoke-direct {p0, v1}, Lcom/car/musiclite/LyricsBox;->dpF(I)F
+
+    move-result v1
+
+    invoke-virtual {v0, v1}, Landroid/graphics/Paint;->setTextSize(F)V
+
+    invoke-virtual {v0, p4}, Landroid/graphics/Paint;->setAlpha(I)V
+
+    sget-object v3, Landroid/graphics/Paint$Align;->CENTER:Landroid/graphics/Paint$Align;
+
+    invoke-virtual {v0, v3}, Landroid/graphics/Paint;->setTextAlign(Landroid/graphics/Paint$Align;)V
+
+    # baseline = (float)cy + size*0.35
+    const v3, 0x3eb33333
+
+    mul-float/2addr v1, v3
+
+    int-to-float v3, p3
+
+    add-float/2addr v1, v3
+
+    invoke-virtual {p0}, Lcom/car/musiclite/LyricsBox;->getWidth()I
+
+    move-result v3
+
+    int-to-float v3, v3
+
+    const/high16 v4, 0x3f000000
+
+    mul-float/2addr v3, v4
+
+    invoke-virtual {p1, v2, v3, v1, v0}, Landroid/graphics/Canvas;->drawText(Ljava/lang/String;FFLandroid/graphics/Paint;)V
+
+    :ret
     return-void
 .end method
