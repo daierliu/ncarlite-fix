@@ -10,6 +10,7 @@
 .field private ctx:Landroid/content/Context;
 .field private curId:J
 .field private curLine:I
+.field private parseSrcLines:I
 .field private handler:Landroid/os/Handler;
 .field private lines:[Ljava/lang/String;
 .field msg:Ljava/lang/String;
@@ -190,6 +191,10 @@
     invoke-virtual {p1, v11}, Ljava/lang/String;->split(Ljava/lang/String;)[Ljava/lang/String;
 
     move-result-object v3
+
+    array-length v11, v3
+
+    iput v11, p0, Lcom/car/musiclite/LyricsBox;->parseSrcLines:I
 
     const/4 v4, 0x0
 
@@ -530,6 +535,58 @@
     goto :sort_i
 
     :sort_done
+    # diagnostic (once per load): row count + first/last timestamp
+    const-string v5, "MusicLite.Lyric"
+
+    new-instance v6, Ljava/lang/StringBuilder;
+
+    invoke-direct {v6}, Ljava/lang/StringBuilder;-><init>()V
+
+    const-string v0, "parsed rows="
+
+
+    invoke-virtual {v6, v0}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    invoke-virtual {v6, v3}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+    const-string v0, " src="
+
+    invoke-virtual {v6, v0}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    iget v0, p0, Lcom/car/musiclite/LyricsBox;->parseSrcLines:I
+
+    invoke-virtual {v6, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+    const-string v0, " first="
+
+    invoke-virtual {v6, v0}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    const/4 v0, 0x0
+
+    iget-object v1, p0, Lcom/car/musiclite/LyricsBox;->times:[I
+
+    aget v0, v1, v0
+
+    invoke-virtual {v6, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+    const-string v0, " last="
+
+    invoke-virtual {v6, v0}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    add-int/lit8 v0, v3, -0x1
+
+    iget-object v1, p0, Lcom/car/musiclite/LyricsBox;->times:[I
+
+    aget v0, v1, v0
+
+    invoke-virtual {v6, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+    invoke-virtual {v6}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+
+    move-result-object v6
+
+    invoke-static {v5, v6}, Landroid/util/Log;->i(Ljava/lang/String;Ljava/lang/String;)I
+
     const/4 v0, 0x1
 
     return v0
