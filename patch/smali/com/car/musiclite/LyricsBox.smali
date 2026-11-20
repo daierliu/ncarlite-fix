@@ -1962,6 +1962,53 @@
 .method private drawCurRow(Landroid/graphics/Canvas;III)V
     .locals 10
 
+    # diagnostic: row / cy / yrc rows
+    new-instance v5, Ljava/lang/StringBuilder;
+
+    invoke-direct {v5}, Ljava/lang/StringBuilder;-><init>()V
+
+    const-string v6, "dcr row="
+
+    invoke-virtual {v5, v6}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    invoke-virtual {v5, p2}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+    const-string v6, " cy="
+
+    invoke-virtual {v5, v6}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    invoke-virtual {v5, p3}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+    const-string v6, " yrows="
+
+    invoke-virtual {v5, v6}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    sget-object v6, Lcom/car/musiclite/LyricsBox;->sYChars:[[Ljava/lang/String;
+
+    if-eqz v6, :logn
+
+    array-length v6, v6
+
+    invoke-virtual {v5, v6}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+    goto :logb
+
+    :logn
+
+    const-string v6, "null"
+
+    invoke-virtual {v5, v6}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    :logb
+
+    invoke-virtual {v5}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+
+    move-result-object v6
+
+    const-string v5, "MusicLite.Lyric"
+
+    invoke-static {v5, v6}, Landroid/util/Log;->i(Ljava/lang/String;Ljava/lang/String;)I
+
     sget-object v0, Lcom/car/musiclite/LyricsBox;->sYChars:[[Ljava/lang/String;
 
     if-eqz v0, :plain
@@ -2374,10 +2421,40 @@
 
     div-int v5, v4, v5
 
-    if-lez v5, :sh_ok
+    if-gtz v5, :sh_ok
 
     const/4 v5, 0x1
     :sh_ok
+    # diagnostic: height / slot height / curLine
+    new-instance v6, Ljava/lang/StringBuilder;
+
+    invoke-direct {v6}, Ljava/lang/StringBuilder;-><init>()V
+
+    const-string v8, "dw h="
+
+    invoke-virtual {v6, v8}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    invoke-virtual {v6, v4}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+    const-string v8, " sh="
+
+    invoke-virtual {v6, v8}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    invoke-virtual {v6, v5}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+    const-string v8, " cur="
+
+    invoke-virtual {v6, v8}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    invoke-virtual {v6, v3}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+    invoke-virtual {v6}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+
+    move-result-object v8
+
+    const-string v6, "MusicLite.Lyric"
+
+    invoke-static {v6, v8}, Landroid/util/Log;->i(Ljava/lang/String;Ljava/lang/String;)I
     sub-int v12, v3, v10    # iCur
 
     move v7, v10
@@ -2397,7 +2474,7 @@
 
     add-int/2addr v8, v9     # cy (slot center, int px)
 
-    if-eq v7, v3, :nbr
+    if-ne v7, v3, :nbr
 
     invoke-direct {p0, p1, v7, v8, v13}, Lcom/car/musiclite/LyricsBox;->drawCurRow(Landroid/graphics/Canvas;III)V
 
