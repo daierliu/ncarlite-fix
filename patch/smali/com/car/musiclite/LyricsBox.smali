@@ -2116,7 +2116,9 @@
 
     aget v6, v1, v6           # word start (ms)
 
-    add-int/lit8 v7, v6, 0x1
+    shl-int/lit8 v7, v4, 0x1
+
+    add-int/lit8 v7, v7, 0x1  # duration index = i*2+1 (recompute from i, NOT from start ms)
 
     aget v2, v1, v7           # word duration (ms)
 
