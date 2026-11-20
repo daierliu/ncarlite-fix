@@ -1959,55 +1959,47 @@
 .end method
 
 # ---- current row renderer: word-level if yrc exists, else whole-line ----
+# ---- word-level state -> alpha (Tingyu/MD3: waiting / active / passed) ----
+# returns main-text alpha: unplayed 0x73, active ramps 0x73->0xff over 200ms, passed 0xe0
+.method private wordAlpha(III)I
+    .locals 3
+    const/16 v0, 0x73
+    if-lt p1, p2, :wa_ret
+    add-int v1, p2, p3
+    if-ge p1, v1, :wa_passed
+    sub-int v1, p1, p2
+    const/16 v2, 0xc8
+    if-ge v1, v2, :wa_ramp
+    const/16 v0, 0xff
+    goto :wa_ret
+    :wa_ramp
+    mul-int/lit16 v1, v1, 0x8c
+    div-int/2addr v1, v2
+    add-int/lit8 v0, v1, 0x73
+    goto :wa_ret
+    :wa_passed
+    const/16 v0, 0xe0
+    :wa_ret
+    return v0
+.end method
+
+# returns glow alpha: waiting 0x28 (faint), active 0xd0 (strong), passed 0x50 (medium)
+.method private glowAlpha(III)I
+    .locals 2
+    const/16 v0, 0x28
+    if-lt p1, p2, :ga_ret
+    add-int v1, p2, p3
+    if-ge p1, v1, :ga_passed
+    const/16 v0, 0xd0
+    goto :ga_ret
+    :ga_passed
+    const/16 v0, 0x50
+    :ga_ret
+    return v0
+.end method
+
 .method private drawCurRow(Landroid/graphics/Canvas;III)V
     .locals 10
-
-    # diagnostic: row / cy / yrc rows
-    new-instance v5, Ljava/lang/StringBuilder;
-
-    invoke-direct {v5}, Ljava/lang/StringBuilder;-><init>()V
-
-    const-string v6, "dcr row="
-
-    invoke-virtual {v5, v6}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
-
-    invoke-virtual {v5, p2}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
-
-    const-string v6, " cy="
-
-    invoke-virtual {v5, v6}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
-
-    invoke-virtual {v5, p3}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
-
-    const-string v6, " yrows="
-
-    invoke-virtual {v5, v6}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
-
-    sget-object v6, Lcom/car/musiclite/LyricsBox;->sYChars:[[Ljava/lang/String;
-
-    if-eqz v6, :logn
-
-    array-length v6, v6
-
-    invoke-virtual {v5, v6}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
-
-    goto :logb
-
-    :logn
-
-    const-string v6, "null"
-
-    invoke-virtual {v5, v6}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
-
-    :logb
-
-    invoke-virtual {v5}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
-
-    move-result-object v6
-
-    const-string v5, "MusicLite.Lyric"
-
-    invoke-static {v5, v6}, Landroid/util/Log;->i(Ljava/lang/String;Ljava/lang/String;)I
 
     sget-object v0, Lcom/car/musiclite/LyricsBox;->sYChars:[[Ljava/lang/String;
 
@@ -2032,6 +2024,23 @@
     aget-object v1, v1, p2
 
     if-eqz v1, :plain
+
+    # reset shared paint state (left CENTER/dim by plain or neighbor rows)
+    const/16 v2, 0xff
+
+    iget-object v3, p0, Lcom/car/musiclite/LyricsBox;->pMain:Landroid/graphics/Paint;
+
+    invoke-virtual {v3, v2}, Landroid/graphics/Paint;->setAlpha(I)V
+
+    sget-object v3, Landroid/graphics/Paint$Align;->LEFT:Landroid/graphics/Paint$Align;
+
+    iget-object v4, p0, Lcom/car/musiclite/LyricsBox;->pMain:Landroid/graphics/Paint;
+
+    invoke-virtual {v4, v3}, Landroid/graphics/Paint;->setTextAlign(Landroid/graphics/Paint$Align;)V
+
+    iget-object v4, p0, Lcom/car/musiclite/LyricsBox;->pGlow:Landroid/graphics/Paint;
+
+    invoke-virtual {v4, v3}, Landroid/graphics/Paint;->setTextAlign(Landroid/graphics/Paint$Align;)V
 
     const/16 v2, 0x1e
 
@@ -2107,19 +2116,25 @@
 
     aget v6, v1, v6           # word start (ms)
 
-    const/16 v7, 0xff
+    add-int/lit8 v7, v6, 0x1
 
-    if-lt p4, v6, :unp
+    aget v2, v1, v7           # word duration (ms)
 
-    goto :set_a
-    :unp
-    const/16 v7, 0x73
-    :set_a
+    invoke-direct {p0, p4, v6, v2}, Lcom/car/musiclite/LyricsBox;->wordAlpha(III)I
+
+    move-result v7             # main alpha
+
+    invoke-direct {p0, p4, v6, v2}, Lcom/car/musiclite/LyricsBox;->glowAlpha(III)I
+
+    move-result v2             # glow alpha
+
     iget-object v8, p0, Lcom/car/musiclite/LyricsBox;->pMain:Landroid/graphics/Paint;
 
     invoke-virtual {v8, v7}, Landroid/graphics/Paint;->setAlpha(I)V
 
     iget-object v8, p0, Lcom/car/musiclite/LyricsBox;->pGlow:Landroid/graphics/Paint;
+
+    invoke-virtual {v8, v2}, Landroid/graphics/Paint;->setAlpha(I)V
 
     invoke-virtual {p1, v5, v3, v9, v8}, Landroid/graphics/Canvas;->drawText(Ljava/lang/String;FFLandroid/graphics/Paint;)V
 
@@ -2213,6 +2228,17 @@
     if-ge p2, v1, :pr2
 
     aget-object v0, v0, p2
+
+    # reset shared paint alpha (yrc word pass may have left it dimmed)
+    const/16 v6, 0xff
+
+    iget-object v3, p0, Lcom/car/musiclite/LyricsBox;->pMain:Landroid/graphics/Paint;
+
+    invoke-virtual {v3, v6}, Landroid/graphics/Paint;->setAlpha(I)V
+
+    iget-object v4, p0, Lcom/car/musiclite/LyricsBox;->pGlow:Landroid/graphics/Paint;
+
+    invoke-virtual {v4, v6}, Landroid/graphics/Paint;->setAlpha(I)V
 
     const/16 v1, 0x1e
 
@@ -2425,36 +2451,6 @@
 
     const/4 v5, 0x1
     :sh_ok
-    # diagnostic: height / slot height / curLine
-    new-instance v6, Ljava/lang/StringBuilder;
-
-    invoke-direct {v6}, Ljava/lang/StringBuilder;-><init>()V
-
-    const-string v8, "dw h="
-
-    invoke-virtual {v6, v8}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
-
-    invoke-virtual {v6, v4}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
-
-    const-string v8, " sh="
-
-    invoke-virtual {v6, v8}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
-
-    invoke-virtual {v6, v5}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
-
-    const-string v8, " cur="
-
-    invoke-virtual {v6, v8}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
-
-    invoke-virtual {v6, v3}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
-
-    invoke-virtual {v6}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
-
-    move-result-object v8
-
-    const-string v6, "MusicLite.Lyric"
-
-    invoke-static {v6, v8}, Landroid/util/Log;->i(Ljava/lang/String;Ljava/lang/String;)I
     sub-int v12, v3, v10    # iCur
 
     move v7, v10
