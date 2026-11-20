@@ -130,6 +130,27 @@
 
 .field npBar:Landroid/widget/LinearLayout;
 
+# frosted-glass capsule: snapshot + spring state
+.field private glassCv:Landroid/graphics/Canvas;
+
+.field private glassSnap:Landroid/graphics/Bitmap;
+
+.field private glassH:Landroid/os/Handler;
+
+.field private glassRun:Ljava/lang/Runnable;
+
+.field private glassCnt:I
+
+.field private sprY:F
+
+.field private sprV:F
+
+.field private sprT:F
+
+.field private sprOn:I
+
+.field private sprFire:I
+
 .field private npInfoCol:Landroid/widget/LinearLayout;
 
 # theme/heart pills parked here at build time, added into the capsule later
@@ -2900,9 +2921,7 @@
 
     invoke-virtual {v1, v3}, Landroid/view/View;->setLayoutParams(Landroid/view/ViewGroup$LayoutParams;)V
 
-    invoke-static {}, Lcom/car/musiclite/MainActivity;->glassBarDock()Landroid/graphics/drawable/GradientDrawable;
-
-    move-result-object v3
+    sget-object v3, Lcom/car/musiclite/GlassBlur;->inst:Lcom/car/musiclite/GlassBlur;
 
     invoke-virtual {v1, v3}, Landroid/view/View;->setBackground(Landroid/graphics/drawable/Drawable;)V
 
@@ -2927,6 +2946,9 @@
     invoke-virtual {v4, v3}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
 
     :no_artist
+    # frosted-glass capsule: start tick loop, spring the capsule in
+    invoke-direct {v0}, Lcom/car/musiclite/MainActivity;->glassInit()V
+
     # initial capsule visibility follows playing state (hidden before first play)
     invoke-virtual {v0}, Lcom/car/musiclite/MainActivity;->updateTime()V
 
@@ -4186,11 +4208,16 @@
     :capsule_bg
     iget-object v0, p0, Lcom/car/musiclite/MainActivity;->npBar:Landroid/widget/LinearLayout;
 
-    invoke-static {}, Lcom/car/musiclite/MainActivity;->glassBar()Landroid/graphics/drawable/GradientDrawable;
-
-    move-result-object v1
+    sget-object v1, Lcom/car/musiclite/GlassBlur;->inst:Lcom/car/musiclite/GlassBlur;
 
     invoke-virtual {v0, v1}, Landroid/view/View;->setBackground(Landroid/graphics/drawable/Drawable;)V
+
+    # capsule springs in on the lyrics overlay
+    const/4 v1, 0x0
+
+    int-to-float v1, v1
+
+    invoke-direct {p0, v1}, Lcom/car/musiclite/MainActivity;->springTo(F)V
 
     invoke-virtual {p0}, Lcom/car/musiclite/MainActivity;->updateTime()V
 
@@ -4345,11 +4372,16 @@
     :bar_backed
     iget-object v0, p0, Lcom/car/musiclite/MainActivity;->npBar:Landroid/widget/LinearLayout;
 
-    invoke-static {}, Lcom/car/musiclite/MainActivity;->glassBarDock()Landroid/graphics/drawable/GradientDrawable;
-
-    move-result-object v1
+    sget-object v1, Lcom/car/musiclite/GlassBlur;->inst:Lcom/car/musiclite/GlassBlur;
 
     invoke-virtual {v0, v1}, Landroid/view/View;->setBackground(Landroid/graphics/drawable/Drawable;)V
+
+    # capsule springs in on return to the home page
+    const/4 v1, 0x0
+
+    int-to-float v1, v1
+
+    invoke-direct {p0, v1}, Lcom/car/musiclite/MainActivity;->springTo(F)V
 
     # restore theme text colors
     iget-object v0, p0, Lcom/car/musiclite/MainActivity;->npTitle:Landroid/widget/TextView;
@@ -5070,6 +5102,16 @@
     :ut_hide
     invoke-virtual {v1, v3}, Landroid/widget/LinearLayout;->setVisibility(I)V
 
+    # capsule does a small spring every time playback starts (info column shows)
+    if-nez v3, :ut_spr
+
+    const/4 v1, 0x0
+
+    int-to-float v1, v1
+
+    invoke-direct {p0, v1}, Lcom/car/musiclite/MainActivity;->springTo(F)V
+
+    :ut_spr
     :ut_vis_end
     iget-object v0, p0, Lcom/car/musiclite/MainActivity;->npTime:Landroid/widget/TextView;
 
@@ -5382,6 +5424,477 @@
     invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setCornerRadius(F)V
 
     return-object v0
+.end method
+
+# ============ frosted-glass capsule: tick loop / spring / snapshot ============
+
+.method private glassInit()V
+    .locals 4
+
+    # start parked under the screen edge, ready to spring in
+    const v0, 0x3f800000
+
+    iput v0, p0, Lcom/car/musiclite/MainActivity;->sprY:F
+
+    iput v0, p0, Lcom/car/musiclite/MainActivity;->sprT:F
+
+    const/4 v0, 0x0
+
+    iput v0, p0, Lcom/car/musiclite/MainActivity;->sprV:F
+
+    iput v0, p0, Lcom/car/musiclite/MainActivity;->sprOn:I
+
+    invoke-static {}, Lcom/car/musiclite/MainActivity;->isNight()Z
+
+    move-result v0
+
+    invoke-static {v0}, Lcom/car/musiclite/GlassBlur;->setMode(Z)V
+
+    new-instance v0, Landroid/os/Handler;
+
+    invoke-virtual {p0}, Lcom/car/musiclite/MainActivity;->getMainLooper()Landroid/os/Looper;
+
+    move-result-object v1
+
+    invoke-direct {v0, v1}, Landroid/os/Handler;-><init>(Landroid/os/Looper;)V
+
+    iput-object v0, p0, Lcom/car/musiclite/MainActivity;->glassH:Landroid/os/Handler;
+
+    new-instance v1, Lcom/car/musiclite/GlassTick;
+
+    invoke-direct {v1, p0}, Lcom/car/musiclite/GlassTick;-><init>(Lcom/car/musiclite/MainActivity;)V
+
+    iput-object v1, p0, Lcom/car/musiclite/MainActivity;->glassRun:Ljava/lang/Runnable;
+
+    # park the capsule below the screen immediately (no first-frame flash)
+    invoke-direct {p0}, Lcom/car/musiclite/MainActivity;->applyCapsule()V
+
+    const-wide/16 v2, 0x190
+
+    invoke-virtual {v0, v1, v2, v3}, Landroid/os/Handler;->postDelayed(Ljava/lang/Runnable;J)Z
+
+    return-void
+.end method
+
+# one tick (16ms): integrate spring, refresh backdrop every ~9 ticks, schedule next
+.method public glassStep()V
+    .locals 8
+
+    # first tick: layout is ready now, spring the capsule in
+    iget v0, p0, Lcom/car/musiclite/MainActivity;->sprFire:I
+
+    if-eqz v0, :gs_fire_done
+
+    const/4 v0, 0x1
+
+    iput v0, p0, Lcom/car/musiclite/MainActivity;->sprFire:I
+
+    const/4 v1, 0x0
+
+    int-to-float v1, v1
+
+    invoke-direct {p0, v1}, Lcom/car/musiclite/MainActivity;->springTo(F)V
+
+    :gs_fire_done
+    iget v0, p0, Lcom/car/musiclite/MainActivity;->sprOn:I
+
+    if-eqz v0, :gs_snap
+
+    # a = -k*(y-t) - c*v ; k=280 c=28 dt=0.016
+    iget v0, p0, Lcom/car/musiclite/MainActivity;->sprY:F
+
+    iget v1, p0, Lcom/car/musiclite/MainActivity;->sprT:F
+
+    sub-float v2, v0, v1
+
+    const v3, 0x438c0000        # 280.0f
+
+    mul-float/2addr v3, v2      # 280*(y-t)
+
+    iget v4, p0, Lcom/car/musiclite/MainActivity;->sprV:F
+
+    const v5, 0x41e00000        # 28.0f
+
+    mul-float/2addr v5, v4      # 28*v
+
+    neg-float v6, v3            # -280*(y-t)
+
+    sub-float v6, v6, v5        # a
+
+    const v7, 0x3c83126f        # 0.016f
+
+    mul-float/2addr v6, v7      # a*dt
+
+    add-float/2addr v4, v6      # v'
+
+    mul-float v6, v4, v7        # v'*dt
+
+    add-float/2addr v0, v6      # y'
+
+    iput v4, p0, Lcom/car/musiclite/MainActivity;->sprV:F
+
+    iput v0, p0, Lcom/car/musiclite/MainActivity;->sprY:F
+
+    # convergence: |y'-t| and |v| both tiny -> snap
+    sub-float v1, v0, v1
+
+    invoke-static {v1}, Ljava/lang/Math;->abs(F)F
+
+    move-result v1
+
+    const v2, 0x3b449ba6        # 0.003f
+
+    cmpg-float v3, v1, v2
+
+    if-gez v3, :gs_vchk
+
+    iget v1, p0, Lcom/car/musiclite/MainActivity;->sprV:F
+
+    invoke-static {v1}, Ljava/lang/Math;->abs(F)F
+
+    move-result v1
+
+    cmpg-float v3, v1, v2
+
+    if-gez v3, :gs_vchk
+
+    iget v1, p0, Lcom/car/musiclite/MainActivity;->sprT:F
+
+    iput v1, p0, Lcom/car/musiclite/MainActivity;->sprY:F
+
+    const/4 v1, 0x0
+
+    iput v1, p0, Lcom/car/musiclite/MainActivity;->sprV:F
+
+    iput v1, p0, Lcom/car/musiclite/MainActivity;->sprOn:I
+
+    :gs_vchk
+    goto :gs_snap
+
+    # refresh backdrop every 9 ticks while the capsule is visible
+    :gs_snap
+    iget-object v0, p0, Lcom/car/musiclite/MainActivity;->npBar:Landroid/widget/LinearLayout;
+
+    if-eqz v0, :gs_sched
+
+    invoke-virtual {v0}, Landroid/view/View;->getVisibility()I
+
+    move-result v1
+
+    if-nez v1, :gs_sched
+
+    iget v1, p0, Lcom/car/musiclite/MainActivity;->glassCnt:I
+
+    add-int/lit8 v1, v1, 0x1
+
+    iput v1, p0, Lcom/car/musiclite/MainActivity;->glassCnt:I
+
+    const/16 v2, 0x9
+
+    rem-int/2addr v1, v2
+
+    if-nez v1, :gs_sched
+
+    invoke-direct {p0}, Lcom/car/musiclite/MainActivity;->glassUpdateSnap()V
+
+    :gs_sched
+    # apply current spring state (translation + alpha)
+    invoke-direct {p0}, Lcom/car/musiclite/MainActivity;->applyCapsule()V
+
+    # schedule next tick
+    iget-object v0, p0, Lcom/car/musiclite/MainActivity;->glassH:Landroid/os/Handler;
+
+    if-eqz v0, :gs_ret
+
+    iget-object v1, p0, Lcom/car/musiclite/MainActivity;->glassRun:Ljava/lang/Runnable;
+
+    const-wide/16 v2, 0x10
+
+    invoke-virtual {v0, v1, v2, v3}, Landroid/os/Handler;->postDelayed(Ljava/lang/Runnable;J)Z
+
+    :gs_ret
+    return-void
+.end method
+
+# place the capsule according to spring state: parked = below screen + faded
+.method private applyCapsule()V
+    .locals 4
+
+    iget-object v0, p0, Lcom/car/musiclite/MainActivity;->npBar:Landroid/widget/LinearLayout;
+
+    if-eqz v0, :ac_ret
+
+    invoke-virtual {v0}, Landroid/view/View;->getHeight()I
+
+    move-result v1
+
+    const/16 v2, 0x1c
+
+    invoke-direct {p0, v2}, Lcom/car/musiclite/MainActivity;->dp(I)I
+
+    move-result v2
+
+    add-int/2addr v1, v2
+
+    # not laid out yet -> assume a screen-sized park distance
+    const/16 v2, 0x28
+
+    if-ge v1, v2, :ac_h_ok
+
+    const/16 v1, 0x1e0
+
+    :ac_h_ok
+    int-to-float v1, v1
+
+    iget v3, p0, Lcom/car/musiclite/MainActivity;->sprY:F
+
+    mul-float/2addr v3, v1
+
+    invoke-virtual {v0, v3}, Landroid/view/View;->setTranslationY(F)V
+
+    iget v3, p0, Lcom/car/musiclite/MainActivity;->sprY:F
+
+    const/high16 v2, 0x3f800000
+
+    invoke-static {v3, v2}, Ljava/lang/Math;->min(FF)F
+
+    move-result v3
+
+    const/4 v2, 0x0
+
+    invoke-static {v3, v2}, Ljava/lang/Math;->max(FF)F
+
+    move-result v3
+
+    const/high16 v2, 0x3f800000
+
+    sub-float v3, v2, v3
+
+    invoke-virtual {v0, v3}, Landroid/view/View;->setAlpha(F)V
+
+    :ac_ret
+    return-void
+.end method
+
+# spring the capsule to a target offset (0 = docked, 1 = parked below)
+.method private springTo(F)V
+    .locals 4
+
+    iput p1, p0, Lcom/car/musiclite/MainActivity;->sprT:F
+
+    iget v0, p0, Lcom/car/musiclite/MainActivity;->sprOn:I
+
+    if-eqz v0, :st_go
+
+    return-void                 # already animating; target updated above
+
+    :st_go
+    iget v0, p0, Lcom/car/musiclite/MainActivity;->sprY:F
+
+    sub-float v0, v0, p1
+
+    invoke-static {v0}, Ljava/lang/Math;->abs(F)F
+
+    move-result v0
+
+    const v1, 0x3b449ba6        # 0.003f
+
+    cmpg-float v2, v0, v1
+
+    if-gez v2, :st_run
+
+    return-void                 # close enough, nothing to do
+
+    :st_run
+    const/4 v0, 0x1
+
+    iput v0, p0, Lcom/car/musiclite/MainActivity;->sprOn:I
+
+    iget-object v0, p0, Lcom/car/musiclite/MainActivity;->glassH:Landroid/os/Handler;
+
+    if-eqz v0, :st_ret
+
+    iget-object v1, p0, Lcom/car/musiclite/MainActivity;->glassRun:Ljava/lang/Runnable;
+
+    const-wide/16 v2, 0x0
+
+    invoke-virtual {v0, v1, v2, v3}, Landroid/os/Handler;->postDelayed(Ljava/lang/Runnable;J)Z
+
+    :st_ret
+    return-void
+.end method
+
+# capture the content behind the capsule into a 1/8 bitmap (the blur source)
+.method private glassUpdateSnap()V
+    .locals 9
+
+    iget-object v0, p0, Lcom/car/musiclite/MainActivity;->content:Landroid/widget/FrameLayout;
+
+    if-eqz v0, :us_ret
+
+    invoke-virtual {v0}, Landroid/view/View;->getWidth()I
+
+    move-result v1
+
+    invoke-virtual {v0}, Landroid/view/View;->getHeight()I
+
+    move-result v2
+
+    if-lez v1, :us_ret
+
+    if-lez v2, :us_ret
+
+    shr-int/lit8 v3, v1, 0x3
+
+    shr-int/lit8 v4, v2, 0x3
+
+    const/4 v5, 0x2
+
+    if-ge v3, v5, :us_sz
+
+    move v3, v5
+
+    :us_sz
+    if-ge v4, v5, :us_sz2
+
+    move v4, v5
+
+    :us_sz2
+    iget-object v6, p0, Lcom/car/musiclite/MainActivity;->glassSnap:Landroid/graphics/Bitmap;
+
+    if-eqz v6, :us_mk
+
+    invoke-virtual {v6}, Landroid/graphics/Bitmap;->getWidth()I
+
+    move-result v7
+
+    if-eq v7, v3, :us_chk
+
+    :us_mk
+    sget-object v6, Landroid/graphics/Bitmap$Config;->ARGB_8888:Landroid/graphics/Bitmap$Config;
+
+    invoke-static {v3, v4, v6}, Landroid/graphics/Bitmap;->createBitmap(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;
+
+    move-result-object v6
+
+    iput-object v6, p0, Lcom/car/musiclite/MainActivity;->glassSnap:Landroid/graphics/Bitmap;
+
+    const/4 v7, 0x0
+
+    iput-object v7, p0, Lcom/car/musiclite/MainActivity;->glassCv:Landroid/graphics/Canvas;
+
+    goto :us_cv
+
+    :us_chk
+    invoke-virtual {v6}, Landroid/graphics/Bitmap;->getHeight()I
+
+    move-result v7
+
+    if-eq v7, v4, :us_cv
+
+    goto :us_mk
+
+    :us_cv
+    iget-object v6, p0, Lcom/car/musiclite/MainActivity;->glassCv:Landroid/graphics/Canvas;
+
+    if-eqz v6, :us_mkcv
+
+    iget-object v7, p0, Lcom/car/musiclite/MainActivity;->glassSnap:Landroid/graphics/Bitmap;
+
+    invoke-virtual {v6, v7}, Landroid/graphics/Canvas;->setBitmap(Landroid/graphics/Bitmap;)V
+
+    goto :us_draw
+
+    :us_mkcv
+    new-instance v6, Landroid/graphics/Canvas;
+
+    iget-object v7, p0, Lcom/car/musiclite/MainActivity;->glassSnap:Landroid/graphics/Bitmap;
+
+    invoke-direct {v6, v7}, Landroid/graphics/Canvas;-><init>(Landroid/graphics/Bitmap;)V
+
+    iput-object v6, p0, Lcom/car/musiclite/MainActivity;->glassCv:Landroid/graphics/Canvas;
+
+    :us_draw
+    # hide the capsule itself so the blur source never contains it
+    iget-object v6, p0, Lcom/car/musiclite/MainActivity;->npBar:Landroid/widget/LinearLayout;
+
+    if-eqz v6, :us_off
+
+    const/4 v7, 0x0
+
+    invoke-virtual {v6, v7}, Landroid/view/View;->setAlpha(F)V
+
+    :us_off
+    iget-object v6, p0, Lcom/car/musiclite/MainActivity;->glassCv:Landroid/graphics/Canvas;
+
+    invoke-virtual {v6}, Landroid/graphics/Canvas;->save()I
+
+    int-to-float v5, v3
+
+    int-to-float v7, v1
+
+    div-float/2addr v5, v7      # scale x = snapW / contentW
+
+    int-to-float v7, v4
+
+    int-to-float v8, v2
+
+    div-float/2addr v7, v8      # scale y = snapH / contentH
+
+    invoke-virtual {v6, v5, v7}, Landroid/graphics/Canvas;->scale(FF)V
+
+    invoke-virtual {v0, v6}, Landroid/view/View;->draw(Landroid/graphics/Canvas;)V
+
+    invoke-virtual {v6}, Landroid/graphics/Canvas;->restore()V
+
+    # restore capsule visual state from the spring
+    invoke-direct {p0}, Lcom/car/musiclite/MainActivity;->applyCapsule()V
+
+    # capsule offset relative to the captured content (window coords diff), / 8
+    const/4 v1, 0x2
+
+    new-array v5, v1, [I
+
+    new-array v6, v1, [I
+
+    iget-object v7, p0, Lcom/car/musiclite/MainActivity;->npBar:Landroid/widget/LinearLayout;
+
+    if-eqz v7, :us_ret
+
+    invoke-virtual {v7, v5}, Landroid/view/View;->getLocationOnScreen([I)V
+
+    invoke-virtual {v0, v6}, Landroid/view/View;->getLocationOnScreen([I)V
+
+    const/4 v4, 0x0
+
+    aget v1, v5, v4
+
+    aget v2, v6, v4
+
+    sub-int/2addr v1, v2
+
+    const/4 v4, 0x1
+
+    aget v2, v5, v4
+
+    aget v3, v6, v4
+
+    sub-int/2addr v2, v3
+
+    shr-int/lit8 v1, v1, 0x3
+
+    shr-int/lit8 v2, v2, 0x3
+
+    iget-object v3, p0, Lcom/car/musiclite/MainActivity;->glassSnap:Landroid/graphics/Bitmap;
+
+    invoke-static {v3, v1, v2}, Lcom/car/musiclite/GlassBlur;->setSource(Landroid/graphics/Bitmap;II)V
+
+    iget-object v3, p0, Lcom/car/musiclite/MainActivity;->npBar:Landroid/widget/LinearLayout;
+
+    invoke-virtual {v3}, Landroid/view/View;->invalidate()V
+
+    :us_ret
+    return-void
 .end method
 
 .method public static glassBarDock()Landroid/graphics/drawable/GradientDrawable;
